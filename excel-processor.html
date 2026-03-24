@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Excel 数据处理工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d2e;
+      --surface2: #242740;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(99,102,241,0.6);
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --accent-glow: rgba(99,102,241,0.25);
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --danger-glow: rgba(239,68,68,0.2);
+      --success: #10b981;
+      --success-glow: rgba(16,185,129,0.2);
+      --warning: #f59e0b;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 24px 40px;
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(99,102,241,0.15) 100%);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+    }
+    header .logo {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .header-badge {
+      margin-left: auto;
+      background: var(--accent-glow);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      padding: 32px 40px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ── Step indicator ── */
+    .steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 36px;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+    .step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+    .step-circle {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: all 0.3s ease;
+    }
+    .step.active .step-circle {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-color: var(--accent);
+      color: white;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .step.done .step-circle {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+    .step-label { font-size: 12px; color: var(--text-muted); text-align: center; }
+    .step.active .step-label { color: var(--accent); }
+    .step.done .step-label { color: var(--success); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: var(--border-hover); }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .icon {
+      width: 28px; height: 28px;
+      background: var(--accent-glow);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .card-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(99,102,241,0.03);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      transform: translateY(-2px);
+    }
+    .upload-zone .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .upload-zone h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .upload-zone p { font-size: 13px; color: var(--text-muted); }
+    #fileInput { display: none; }
+
+    /* ── File info ── */
+    .file-info {
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .file-info .file-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .file-info .file-details { flex: 1; min-width: 0; }
+    .file-info .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-info .file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .file-info .remove-btn {
+      background: none; border: none;
+      color: var(--text-muted); cursor: pointer;
+      font-size: 18px; padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .file-info .remove-btn:hover { color: var(--danger); background: var(--danger-glow); }
+
+    /* ── Grid layout for operations ── */
+    .ops-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    /* ── Operation cards ── */
+    .op-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .op-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .op-card.keep::before { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .op-card.delete::before { background: linear-gradient(90deg, var(--danger), #f97316); }
+    .op-card.columns::before { background: linear-gradient(90deg, var(--warning), #f59e0b); }
+
+    .op-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .op-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .badge-keep { background: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-delete { background: var(--danger-glow); color: var(--danger); border: 1px solid var(--danger); }
+    .badge-warning { background: rgba(245,158,11,0.2); color: var(--warning); border: 1px solid var(--warning); }
+
+    .op-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .input-group { flex: 1; }
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .input-group input[type="number"],
+    .input-group select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .input-group input:focus,
+    .input-group select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .input-group select option { background: var(--surface2); }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger), #dc2626);
+      color: white;
+    }
+    .btn-danger:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px var(--danger-glow); }
+    .btn-warning {
+      background: linear-gradient(135deg, var(--warning), #d97706);
+      color: white;
+    }
+    .btn-warning:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,158,11,0.3); }
+    .btn-success {
+      background: linear-gradient(135deg, var(--success), #059669);
+      color: white;
+      padding: 14px 32px;
+      font-size: 15px;
+    }
+    .btn-success:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px var(--success-glow); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--border-hover); color: var(--text); }
+
+    /* ── Column delete confirmation ── */
+    .confirm-section {
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+    .confirm-section.visible { display: block; }
+    .confirm-section p {
+      font-size: 13px;
+      color: var(--warning);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    .confirm-section .confirm-btns { display: flex; gap: 10px; }
+
+    /* ── Preview table ── */
+    .preview-section {
+      margin-top: 24px;
+      display: none;
+    }
+    .preview-section.visible { display: block; }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .preview-title { font-size: 15px; font-weight: 700; }
+    .preview-stats { display: flex; gap: 12px; }
+    .stat-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .stat-chip span { color: var(--text); font-weight: 600; }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 380px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      background: var(--surface2);
+      z-index: 5;
+    }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    th.col-deleted {
+      color: var(--danger);
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+    td {
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tr:hover td { background: rgba(99,102,241,0.05); }
+    tr.row-deleted td {
+      background: rgba(239,68,68,0.06);
+      color: var(--danger);
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+
+    /* ── Operation log ── */
+    .op-log {
+      margin-top: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      max-height: 140px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+    }
+    .log-item {
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--text-muted);
+      display: flex;
+      gap: 10px;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-time { color: var(--accent); opacity: 0.7; flex-shrink: 0; }
+    .log-success { color: var(--success); }
+    .log-warning { color: var(--warning); }
+    .log-danger { color: var(--danger); }
+
+    /* ── Export section ── */
+    .export-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 28px;
+      margin-top: 28px;
+    }
+    .export-info h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .export-info p { font-size: 13px; color: var(--text-muted); }
+    .export-actions { display: flex; gap: 12px; }
+
+    /* ── Disabled op-card ── */
+    .op-card.disabled {
+      opacity: 0.38;
+      pointer-events: none;
+      filter: grayscale(0.5);
+      position: relative;
+    }
+    .op-card.disabled::after {
+      content: '已锁定（另一操作执行后不可切换）';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15,17,23,0.55);
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    /* ── Export button locked state ── */
+    .btn-success.locked {
+      background: var(--surface2) !important;
+      color: var(--text-muted) !important;
+      box-shadow: none !important;
+      cursor: not-allowed !important;
+      transform: none !important;
+      border: 1px dashed var(--border);
+    }
+    .export-locked-tip {
+      font-size: 12px;
+      color: var(--warning);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .card, .op-card { animation: fadeIn 0.4s ease both; }
+    .card:nth-child(2) { animation-delay: 0.05s; }
+    .card:nth-child(3) { animation-delay: 0.1s; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      main { padding: 20px 16px; }
+      header { padding: 16px 20px; }
+      .ops-grid { grid-template-columns: 1fr; }
+      .export-section { flex-direction: column; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📊</div>
+  <div>
+    <h1>Excel 数据处理工具</h1>
+    <div class="subtitle">上传 · 清洗 · 裁剪 · 导出</div>
+  </div>
+  <div class="header-badge">✦ 高级版</div>
+</header>
+
+<main>
+  <!-- Step indicator -->
+  <div class="steps">
+    <div class="step active" id="step1">
+      <div class="step-circle">1</div>
+      <div class="step-label">上传文件</div>
+    </div>
+    <div class="step" id="step2">
+      <div class="step-circle">2</div>
+      <div class="step-label">配置操作</div>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-circle">3</div>
+      <div class="step-label">预览结果</div>
+    </div>
+    <div class="step" id="step4">
+      <div class="step-circle">4</div>
+      <div class="step-label">导出文件</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="card" id="uploadCard">
+    <div class="card-title">
+      <div class="icon">📁</div>
+      上传 Excel 文件
+    </div>
+    <div class="card-desc">支持 .xlsx / .xls 格式，文件在本地处理，不会上传到任何服务器</div>
+
+    <div class="upload-zone" id="uploadZone">
+      <span class="upload-icon">📂</span>
+      <h3>拖拽文件到这里，或点击选择</h3>
+      <p>支持 .xlsx · .xls 格式</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    </div>
+
+    <div class="file-info" id="fileInfo" style="display:none;">
+      <span class="file-icon">📗</span>
+      <div class="file-details">
+        <div class="file-name" id="fileName">-</div>
+        <div class="file-meta" id="fileMeta">-</div>
+      </div>
+      <button class="remove-btn" onclick="removeFile()" title="移除文件">✕</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Operations -->
+  <div class="ops-grid" id="opsSection" style="display:none;">
+
+    <!-- Keep rows -->
+    <div class="op-card keep" id="keepCard">
+      <div class="op-title">
+        <span>🎯</span> 保留行
+        <span class="op-badge badge-keep">保留</span>
+      </div>
+      <div class="op-desc">随机保留指定数量或比例的数据行（不含首行表头），其余行删除。</div>
+      <div class="input-row">
+        <div class="input-group" style="flex:0 0 110px;">
+          <label>模式</label>
+          <select id="keepMode" onchange="onKeepModeChange()">
+            <option value="count">按数量</option>
+            <option value="ratio">按比例 (%)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label id="keepInputLabel">保留行数</label>
+          <input type="number" id="keepValue" min="1" placeholder="例如：100" />
+        </div>
+        <button class="btn btn-primary" onclick="applyKeep()">▶ 执行</button>
+      </div>
+      <div id="keepHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+    </div>
+
+    <!-- Delete rows -->
+    <div class="op-card delete" id="deleteCard">
+      <div class="op-title">
+        <span>🗑️</span> 删除行
+        <span class="op-badge badge-delete">删除</span>
+      </div>
+      <div class="op-desc">随机删除指定数量或比例的数据行（不含首行表头），其余行保留。</div>
+      <div class="input-row">
+        <div class="input-group" style="flex:0 0 110px;">
+          <label>模式</label>
+          <select id="deleteMode" onchange="onDeleteModeChange()">
+            <option value="count">按数量</option>
+            <option value="ratio">按比例 (%)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label id="deleteInputLabel">删除行数</label>
+          <input type="number" id="deleteValue" min="1" placeholder="例如：50" />
+        </div>
+        <button class="btn btn-danger" onclick="applyDelete()">▶ 执行</button>
+      </div>
+      <div id="deleteHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+    </div>
+
+    <!-- Delete columns from F -->
+    <div class="op-card columns" style="grid-column: 1 / -1;">
+      <div class="op-title">
+        <span>✂️</span> 从 F 列开始删除（保留 A–E 列）
+        <span class="op-badge badge-warning">需手动确认</span>
+      </div>
+      <div class="op-desc">
+        将只保留 A、B、C、D、E 共 5 列（列索引 0–4），从第 6 列起（F 列及以后）全部删除。
+        此操作不可撤销，请确认后执行。
+      </div>
+      <button class="btn btn-warning" onclick="showColumnConfirm()">预览并确认删除</button>
+
+      <div class="confirm-section" id="columnConfirm">
+        <p>⚠️ 即将删除 F 列及以后的所有列，仅保留 A–E 列，已删除的列会以红色标注预览。确认执行吗？</p>
+        <div class="confirm-btns">
+          <button class="btn btn-danger" onclick="applyColumnDelete()">✓ 确认删除</button>
+          <button class="btn btn-ghost" onclick="hideColumnConfirm()">✕ 取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operation Log -->
+  <div id="logSection" style="display:none; margin-top: 20px;">
+    <div class="card">
+      <div class="card-title"><div class="icon">📋</div> 操作日志</div>
+      <div class="op-log" id="opLog"></div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-section card" id="previewSection" style="display:none; margin-top: 24px;">
+    <div class="preview-header">
+      <div class="preview-title">📊 数据预览</div>
+      <div class="preview-stats">
+        <div class="stat-chip">总行数 <span id="statTotal">-</span></div>
+        <div class="stat-chip">当前行数 <span id="statCurrent">-</span></div>
+        <div class="stat-chip">列数 <span id="statCols">-</span></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="previewTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <p style="font-size:12px; color: var(--text-muted); margin-top: 10px; text-align: right;">
+      📌 预览最多显示 200 行；红色划线行为已标记删除行（不会出现在导出文件中）
+    </p>
+  </div>
+
+  <!-- Export -->
+  <div class="export-section" id="exportSection" style="display:none;">
+    <div class="export-info">
+      <h3 id="exportTitle">⏳ 请先执行操作</h3>
+      <p id="exportDesc">完成至少一项行操作或列删除后，即可下载处理后的文件</p>
+      <div class="export-locked-tip" id="exportLockedTip">⚠️ 尚未执行任何处理，下载已禁用</div>
+    </div>
+    <div class="export-actions">
+      <button class="btn btn-ghost" onclick="resetAll()">🔄 重新开始</button>
+      <button class="btn btn-success locked" id="exportBtn" onclick="exportFile()">🔒 下载处理后的文件</button>
+    </div>
+  </div>
+</main>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let originalData = [];
+  let headers = [];
+  let workingRows = [];
+  let deletedRowIndices = new Set();
+  let deletedCols = false;
+  let fileName = '';
+  let sheetName = '';
+
+  // 操作互斥状态：'none' | 'keep' | 'delete'
+  let rowOpChosen = 'none';
+  // 是否已执行行操作（保留或删除行），控制下载解锁
+  // 注意：列操作不算，必须执行行操作才能下载
+  let rowOpExecuted = false;
+
+  // ── File upload ────────────────────────────────────────────────────────────
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput  = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+  });
+
+  function processFile(file) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      showToast('❌ 仅支持 .xlsx / .xls 格式', 'error'); return;
+    }
+    fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        sheetName = wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!raw || raw.length < 2) { showToast('⚠️ 表格数据为空或仅有表头', 'warning'); return; }
+
+        headers = raw[0].map(h => String(h));
+        workingRows = raw.slice(1).map(r => {
+          while (r.length < headers.length) r.push('');
+          return [...r];
+        });
+        deletedRowIndices = new Set();
+        deletedCols = false;
+        rowOpChosen = 'none';
+        rowOpExecuted = false;
+
+        document.getElementById('fileInfo').style.display = 'flex';
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileMeta').textContent =
+          `大小: ${(file.size/1024).toFixed(1)} KB · Sheet: ${sheetName} · ${workingRows.length} 行数据 · ${headers.length} 列`;
+
+        document.getElementById('opsSection').style.display = 'grid';
+        document.getElementById('logSection').style.display = 'block';
+        document.getElementById('exportSection').style.display = 'flex';
+        updateRowOpMutex();
+        updateExportLock();
+        updateStep(2);
+        renderPreview();
+        log(`文件载入成功：${file.name}，共 ${workingRows.length} 行，${headers.length} 列`, 'success');
+        showToast(`✅ 成功读取 ${workingRows.length} 行数据`, 'success');
+      } catch(err) {
+        showToast('❌ 解析失败：' + err.message, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function removeFile() {
+    fileInput.value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('opsSection').style.display = 'none';
+    document.getElementById('logSection').style.display = 'none';
+    document.getElementById('previewSection').style.display = 'none';
+    document.getElementById('exportSection').style.display = 'none';
+    headers = []; workingRows = []; deletedRowIndices = new Set(); deletedCols = false;
+    rowOpChosen = 'none'; rowOpExecuted = false;
+    updateRowOpMutex();
+    updateExportLock();
+    updateStep(1);
+  }
+
+  // ── Mode change hints ──────────────────────────────────────────────
+  function onKeepModeChange() {
+    const mode = document.getElementById('keepMode').value;
+    const label = document.getElementById('keepInputLabel');
+    const input = document.getElementById('keepValue');
+    const hint  = document.getElementById('keepHint');
+    if (mode === 'ratio') {
+      label.textContent = '保留比例 (%)';
+      input.placeholder = '例如：30  表示保留30%';
+      input.min = '1'; input.max = '100';
+      const active = getActiveRows();
+      hint.textContent = active.length ? `当前有效行数：${active.length}，输入30则保留约 ${Math.round(active.length*0.3)} 行` : '';
+    } else {
+      label.textContent = '保留行数';
+      input.placeholder = '例如：100';
+      input.removeAttribute('max');
+      hint.textContent = '';
+    }
+    input.value = '';
+  }
+
+  function onDeleteModeChange() {
+    const mode = document.getElementById('deleteMode').value;
+    const label = document.getElementById('deleteInputLabel');
+    const input = document.getElementById('deleteValue');
+    const hint  = document.getElementById('deleteHint');
+    if (mode === 'ratio') {
+      label.textContent = '删除比例 (%)';
+      input.placeholder = '例如：20  表示删除20%';
+      input.min = '1'; input.max = '100';
+      const active = getActiveRows();
+      hint.textContent = active.length ? `当前有效行数：${active.length}，输入20则删除约 ${Math.round(active.length*0.2)} 行` : '';
+    } else {
+      label.textContent = '删除行数';
+      input.placeholder = '例如：50';
+      input.removeAttribute('max');
+      hint.textContent = '';
+    }
+    input.value = '';
+  }
+
+  // ── Row operations ─────────────────────────────────────────────────────────
+  function getActiveRows() {
+    return workingRows.filter((_, i) => !deletedRowIndices.has(i));
+  }
+
+  function getActiveIndices() {
+    return workingRows.reduce((acc, _, i) => {
+      if (!deletedRowIndices.has(i)) acc.push(i);
+      return acc;
+    }, []);
+  }
+
+  function applyKeep() {
+    const mode  = document.getElementById('keepMode').value;
+    const rawVal = parseFloat(document.getElementById('keepValue').value);
+    const active = getActiveRows();
+
+    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
+
+    let keepCount;
+    if (mode === 'ratio') {
+      if (rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
+      keepCount = Math.round(active.length * rawVal / 100);
+      keepCount = Math.max(1, keepCount);
+    } else {
+      keepCount = Math.floor(rawVal);
+    }
+
+    if (keepCount >= active.length) {
+      showToast(`⚠️ 保留数量（${keepCount}）≥ 当前有效行数（${active.length}），无需操作`, 'warning'); return;
+    }
+
+    const activeIndices = getActiveIndices();
+    const shuffled = shuffle([...activeIndices]);
+    const toDelete = shuffled.slice(keepCount);
+    toDelete.forEach(i => deletedRowIndices.add(i));
+
+    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${keepCount} 行`;
+    log(`保留行操作（${modeStr}）：从 ${active.length} 行中随机保留 ${keepCount} 行，删除了 ${toDelete.length} 行`, 'success');
+    showToast(`✅ 已随机保留 ${keepCount} 行，删除 ${toDelete.length} 行`, 'success');
+    rowOpChosen = 'keep';
+    rowOpExecuted = true;
+    updateRowOpMutex();
+    updateExportLock();
+    renderPreview();
+    updateStep(3);
+    updateExportDesc();
+    onKeepModeChange();
+  }
+
+  function applyDelete() {
+    const mode   = document.getElementById('deleteMode').value;
+    const rawVal = parseFloat(document.getElementById('deleteValue').value);
+    const active = getActiveRows();
+
+    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
+
+    let toDeleteCount;
+    if (mode === 'ratio') {
+      if (rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
+      toDeleteCount = Math.round(active.length * rawVal / 100);
+      toDeleteCount = Math.max(1, toDeleteCount);
+    } else {
+      toDeleteCount = Math.floor(rawVal);
+    }
+
+    toDeleteCount = Math.min(toDeleteCount, active.length);
+
+    const activeIndices = getActiveIndices();
+    const shuffled = shuffle([...activeIndices]);
+    const toDelete = shuffled.slice(0, toDeleteCount);
+    toDelete.forEach(i => deletedRowIndices.add(i));
+
+    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${toDeleteCount} 行`;
+    log(`删除行操作（${modeStr}）：从 ${active.length} 行中随机删除 ${toDeleteCount} 行，剩余 ${active.length - toDeleteCount} 行`, 'success');
+    showToast(`✅ 已随机删除 ${toDeleteCount} 行，剩余 ${active.length - toDeleteCount} 行`, 'success');
+    rowOpChosen = 'delete';
+    rowOpExecuted = true;
+    updateRowOpMutex();
+    updateExportLock();
+    renderPreview();
+    updateStep(3);
+    updateExportDesc();
+    onDeleteModeChange();
+  }
+
+  // ── Column operations ──────────────────────────────────────────────────────
+  // 保留前 5 列（A-E），从 F 列（索引5）起删除
+  const KEEP_COLS = 5;
+
+  function showColumnConfirm() {
+    if (headers.length <= KEEP_COLS) {
+      showToast(`ℹ️ 当前表格列数 ≤ ${KEEP_COLS}（E列），无需删除`, 'warning'); return;
+    }
+    document.getElementById('columnConfirm').classList.add('visible');
+    renderPreview(true);
+  }
+
+  function hideColumnConfirm() {
+    document.getElementById('columnConfirm').classList.remove('visible');
+    renderPreview();
+  }
+
+  function applyColumnDelete() {
+    const before = headers.length;
+    headers = headers.slice(0, KEEP_COLS);
+    workingRows = workingRows.map(r => r.slice(0, KEEP_COLS));
+    deletedCols = true;
+    document.getElementById('columnConfirm').classList.remove('visible');
+
+    const removed = before - KEEP_COLS;
+    log(`列删除操作：删除了第 ${KEEP_COLS+1} 列（F列）起的 ${removed} 列，保留前 ${KEEP_COLS} 列（A-E）`, 'danger');
+    showToast(`✅ 已删除 ${removed} 列（F列及以后），保留 A-E 列`, 'success');
+    // 注意：不设置 rowOpExecuted，列删除不触发下载解锁
+    renderPreview();
+    updateStep(3);
+    updateExportDesc();
+  }
+
+  // ── Preview ────────────────────────────────────────────────────────────────
+  function renderPreview(highlightCols = false) {
+    const section = document.getElementById('previewSection');
+    section.style.display = 'block';
+    section.classList.add('visible');
+
+    const activeRows = getActiveRows();
+    document.getElementById('statTotal').textContent = workingRows.length;
+    document.getElementById('statCurrent').textContent = activeRows.length;
+    const willDelCols = highlightCols && headers.length > KEEP_COLS;
+    document.getElementById('statCols').textContent = headers.length + (willDelCols ? `（将删除${headers.length - KEEP_COLS}列）` : '');
+
+    // Header
+    const thead = document.getElementById('tableHead');
+    thead.innerHTML = '<tr>' + headers.map((h, i) => {
+      const cls = highlightCols && i >= KEEP_COLS ? 'class="col-deleted"' : '';
+      return `<th ${cls}>${h || '(空)'}</th>`;
+    }).join('') + '</tr>';
+
+    // Body (最多200行)
+    const tbody = document.getElementById('tableBody');
+    const displayRows = workingRows.slice(0, 200);
+    tbody.innerHTML = displayRows.map((row, i) => {
+      const isDeleted = deletedRowIndices.has(i);
+      const trCls = isDeleted ? 'class="row-deleted"' : '';
+      const cells = row.slice(0, headers.length)
+        .map((cell, ci) => {
+          const tdCls = highlightCols && ci >= KEEP_COLS ? 'style="color:var(--danger);opacity:.5;text-decoration:line-through;"' : '';
+          return `<td ${tdCls}>${escapeHtml(String(cell))}</td>`;
+        }).join('');
+      return `<tr ${trCls}>${cells}</tr>`;
+    }).join('');
+  }
+
+  // ── Export desc ───────────────────────────────────────────────────────────
+  function updateExportDesc() {
+    const active = getActiveRows();
+    document.getElementById('exportDesc').textContent =
+      `将导出 ${active.length} 行 × ${headers.length} 列数据`;
+  }
+
+  // ── Row op mutex ──────────────────────────────────────────────────────────
+  // 一旦执行了保留或删除，另一方卡片禁用
+  function updateRowOpMutex() {
+    const keepCard   = document.getElementById('keepCard');
+    const deleteCard = document.getElementById('deleteCard');
+    if (rowOpChosen === 'keep') {
+      keepCard.classList.remove('disabled');
+      deleteCard.classList.add('disabled');
+    } else if (rowOpChosen === 'delete') {
+      deleteCard.classList.remove('disabled');
+      keepCard.classList.add('disabled');
+    } else {
+      keepCard.classList.remove('disabled');
+      deleteCard.classList.remove('disabled');
+    }
+  }
+
+  // ── Export lock ───────────────────────────────────────────────────────────
+  function updateExportLock() {
+    const btn  = document.getElementById('exportBtn');
+    const tip  = document.getElementById('exportLockedTip');
+    const title = document.getElementById('exportTitle');
+    if (rowOpExecuted) {
+      btn.classList.remove('locked');
+      btn.textContent = '⬇️ 下载处理后的文件';
+      tip.style.display = 'none';
+      title.textContent = '✅ 处理完成，可以导出了';
+    } else {
+      btn.classList.add('locked');
+      btn.textContent = '🔒 下载处理后的文件';
+      tip.style.display = 'flex';
+      title.textContent = '⏳ 请先执行操作';
+    }
+  }
+
+  function exportFile() {
+    if (!rowOpExecuted) {
+      showToast('⚠️ 请先执行至少一项行操作后再下载', 'warning');
+      return;
+    }
+    const activeRows = getActiveRows();
+    const exportData = [headers, ...activeRows];
+    const ws = XLSX.utils.aoa_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
+
+    const outName = fileName.replace(/\.(xlsx|xls)$/i, '') + '_processed.xlsx';
+    XLSX.writeFile(wb, outName);
+
+    log(`导出成功：${outName}，共 ${activeRows.length} 行 ${headers.length} 列`, 'success');
+    showToast(`⬇️ 文件已下载：${outName}`, 'success');
+    updateStep(4);
+  }
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  function resetAll() {
+    removeFile();
+    document.getElementById('keepValue').value = '';
+    document.getElementById('deleteValue').value = '';
+    document.getElementById('keepHint').textContent = '';
+    document.getElementById('deleteHint').textContent = '';
+    document.getElementById('opLog').innerHTML = '';
+    showToast('🔄 已重置，请重新上传文件', 'warning');
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function log(msg, type = '') {
+    const logEl = document.getElementById('opLog');
+    const now = new Date();
+    const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    const div = document.createElement('div');
+    div.className = `log-item${type ? ' log-' + type : ''}`;
+    div.innerHTML = `<span class="log-time">[${time}]</span><span>${escapeHtml(msg)}</span>`;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateStep(n) {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('step' + i);
+      el.classList.remove('active', 'done');
+      if (i < n) el.classList.add('done');
+      else if (i === n) el.classList.add('active');
+    }
+  }
+
+  let toastTimer;
+  function showToast(msg, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.className = `show toast-${type}`;
+    toast.textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.className = '', 3500);
+  }
+</script>
+</body>
+</html>
