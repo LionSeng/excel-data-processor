@@ -660,76 +660,7 @@
   <!-- Step 2: Operations -->
   <div class="ops-grid" id="opsSection" style="display:none;">
 
-    <!-- Keep rows -->
-    <div class="op-card keep" id="keepCard">
-      <div class="op-title">
-        <span>🎯</span> 保留行
-        <span class="op-badge badge-keep">保留</span>
-      </div>
-      <div class="op-desc">随机保留指定数量或比例的数据行（不含首行表头），其余行删除。</div>
-      <div class="input-row">
-        <div class="input-group" style="flex:0 0 110px;">
-          <label>模式</label>
-          <select id="keepMode" onchange="onKeepModeChange()">
-            <option value="count">按数量</option>
-            <option value="ratio">按比例 (%)</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label id="keepInputLabel">保留行数</label>
-          <input type="number" id="keepValue" min="1" placeholder="例如：100" />
-        </div>
-        <button class="btn btn-primary" onclick="applyKeep()">▶ 执行</button>
-      </div>
-      <div id="keepHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
-    </div>
-
-    <!-- Delete rows -->
-    <div class="op-card delete" id="deleteCard">
-      <div class="op-title">
-        <span>🗑️</span> 删除行
-        <span class="op-badge badge-delete">删除</span>
-      </div>
-      <div class="op-desc">随机删除指定数量或比例的数据行（不含首行表头），其余行保留。</div>
-      <div class="input-row">
-        <div class="input-group" style="flex:0 0 110px;">
-          <label>模式</label>
-          <select id="deleteMode" onchange="onDeleteModeChange()">
-            <option value="count">按数量</option>
-            <option value="ratio">按比例 (%)</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label id="deleteInputLabel">删除行数</label>
-          <input type="number" id="deleteValue" min="1" placeholder="例如：50" />
-        </div>
-        <button class="btn btn-danger" onclick="applyDelete()">▶ 执行</button>
-      </div>
-      <div id="deleteHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
-    </div>
-
-    <!-- Delete columns from F -->
-    <div class="op-card columns" style="grid-column: 1 / -1;">
-      <div class="op-title">
-        <span>✂️</span> 从 F 列开始删除（保留 A–E 列）
-        <span class="op-badge badge-warning">需手动确认</span>
-      </div>
-      <div class="op-desc">
-        将只保留 A、B、C、D、E 共 5 列（列索引 0–4），从第 6 列起（F 列及以后）全部删除。
-        此操作不可撤销，请确认后执行。
-      </div>
-      <button class="btn btn-warning" onclick="showColumnConfirm()">预览并确认删除</button>
-
-      <div class="confirm-section" id="columnConfirm">
-        <p>⚠️ 即将删除 F 列及以后的所有列，仅保留 A–E 列，已删除的列会以红色标注预览。确认执行吗？</p>
-        <div class="confirm-btns">
-          <button class="btn btn-danger" onclick="applyColumnDelete()">✓ 确认删除</button>
-          <button class="btn btn-ghost" onclick="hideColumnConfirm()">✕ 取消</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ID Filter -->
+    <!-- ID Filter（第一步：先过滤ID，后续操作基于过滤后的行数） -->
     <div class="op-card id-filter" style="grid-column: 1 / -1;">
       <div class="op-title">
         <span>🔍</span> Data100ID 匹配过滤
@@ -777,6 +708,75 @@
       </div>
 
       <div id="idFilterHint" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+    </div>
+
+    <!-- Keep rows -->
+    <div class="op-card keep" id="keepCard">
+      <div class="op-title">
+        <span>🎯</span> 保留行
+        <span class="op-badge badge-keep">保留</span>
+      </div>
+      <div class="op-desc">随机保留指定数量或比例的数据行（不含首行表头），其余行删除。数量基于 ID 过滤后的有效行数。</div>
+      <div class="input-row">
+        <div class="input-group" style="flex:0 0 110px;">
+          <label>模式</label>
+          <select id="keepMode" onchange="onKeepModeChange()">
+            <option value="count">按数量</option>
+            <option value="ratio">按比例 (%)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label id="keepInputLabel">保留行数</label>
+          <input type="number" id="keepValue" min="1" placeholder="例如：100" oninput="onKeepInputChange()" />
+        </div>
+        <button class="btn btn-primary" onclick="applyKeep()">▶ 执行</button>
+      </div>
+      <div id="keepHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+    </div>
+
+    <!-- Delete rows -->
+    <div class="op-card delete" id="deleteCard">
+      <div class="op-title">
+        <span>🗑️</span> 删除行
+        <span class="op-badge badge-delete">删除</span>
+      </div>
+      <div class="op-desc">随机删除指定数量或比例的数据行（不含首行表头），其余行保留。数量基于 ID 过滤后的有效行数。</div>
+      <div class="input-row">
+        <div class="input-group" style="flex:0 0 110px;">
+          <label>模式</label>
+          <select id="deleteMode" onchange="onDeleteModeChange()">
+            <option value="count">按数量</option>
+            <option value="ratio">按比例 (%)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label id="deleteInputLabel">删除行数</label>
+          <input type="number" id="deleteValue" min="1" placeholder="例如：50" oninput="onDeleteInputChange()" />
+        </div>
+        <button class="btn btn-danger" onclick="applyDelete()">▶ 执行</button>
+      </div>
+      <div id="deleteHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+    </div>
+
+    <!-- Delete columns from F -->
+    <div class="op-card columns" style="grid-column: 1 / -1;">
+      <div class="op-title">
+        <span>✂️</span> 从 F 列开始删除（保留 A–E 列）
+        <span class="op-badge badge-warning">需手动确认</span>
+      </div>
+      <div class="op-desc">
+        将只保留 A、B、C、D、E 共 5 列（列索引 0–4），从第 6 列起（F 列及以后）全部删除。
+        此操作不可撤销，请确认后执行。
+      </div>
+      <button class="btn btn-warning" onclick="showColumnConfirm()">预览并确认删除</button>
+
+      <div class="confirm-section" id="columnConfirm">
+        <p>⚠️ 即将删除 F 列及以后的所有列，仅保留 A–E 列，已删除的列会以红色标注预览。确认执行吗？</p>
+        <div class="confirm-btns">
+          <button class="btn btn-danger" onclick="applyColumnDelete()">✓ 确认删除</button>
+          <button class="btn btn-ghost" onclick="hideColumnConfirm()">✕ 取消</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -895,6 +895,8 @@
         updateExportLock();
         updateStep(2);
         renderPreview();
+        onKeepModeChange();
+        onDeleteModeChange();
         log(`文件载入成功：${file.name}，共 ${workingRows.length} 行，${headers.length} 列`, 'success');
         showToast(`✅ 成功读取 ${workingRows.length} 行数据`, 'success');
       } catch(err) {
@@ -924,17 +926,18 @@
     const label = document.getElementById('keepInputLabel');
     const input = document.getElementById('keepValue');
     const hint  = document.getElementById('keepHint');
+    const active = getActiveRows();
+    const activeCount = active.length;
     if (mode === 'ratio') {
       label.textContent = '保留比例 (%)';
       input.placeholder = '例如：30  表示保留30%';
       input.min = '1'; input.max = '100';
-      const active = getActiveRows();
-      hint.textContent = active.length ? `当前有效行数：${active.length}，输入30则保留约 ${Math.round(active.length*0.3)} 行` : '';
+      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入30则保留约 ${Math.round(activeCount*0.3)} 行` : '';
     } else {
       label.textContent = '保留行数';
-      input.placeholder = '例如：100';
+      input.placeholder = `例如：100（当前有效行数：${activeCount || '-'}）`;
       input.removeAttribute('max');
-      hint.textContent = '';
+      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '';
     }
     input.value = '';
   }
@@ -944,19 +947,55 @@
     const label = document.getElementById('deleteInputLabel');
     const input = document.getElementById('deleteValue');
     const hint  = document.getElementById('deleteHint');
+    const active = getActiveRows();
+    const activeCount = active.length;
     if (mode === 'ratio') {
       label.textContent = '删除比例 (%)';
       input.placeholder = '例如：20  表示删除20%';
       input.min = '1'; input.max = '100';
-      const active = getActiveRows();
-      hint.textContent = active.length ? `当前有效行数：${active.length}，输入20则删除约 ${Math.round(active.length*0.2)} 行` : '';
+      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入20则删除约 ${Math.round(activeCount*0.2)} 行` : '';
     } else {
       label.textContent = '删除行数';
-      input.placeholder = '例如：50';
+      input.placeholder = `例如：50（当前有效行数：${activeCount || '-'}）`;
       input.removeAttribute('max');
-      hint.textContent = '';
+      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '';
     }
     input.value = '';
+  }
+
+  // 实时输入时更新提示（基于有效行数）
+  function onKeepInputChange() {
+    const mode = document.getElementById('keepMode').value;
+    const val  = parseFloat(document.getElementById('keepValue').value);
+    const hint = document.getElementById('keepHint');
+    const active = getActiveRows();
+    const activeCount = active.length;
+    if (!activeCount || !val || val <= 0) { hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : ''; return; }
+    if (mode === 'ratio') {
+      const keep = Math.max(1, Math.round(activeCount * val / 100));
+      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 保留约 ${keep} 行，删除约 ${activeCount - keep} 行`;
+    } else {
+      const keep = Math.floor(val);
+      hint.textContent = keep >= activeCount
+        ? `⚠️ 输入值（${keep}）≥ 有效行数（${activeCount}），将全部保留`
+        : `当前有效行数：${activeCount} 行（ID过滤后）→ 保留 ${keep} 行，删除 ${activeCount - keep} 行`;
+    }
+  }
+
+  function onDeleteInputChange() {
+    const mode = document.getElementById('deleteMode').value;
+    const val  = parseFloat(document.getElementById('deleteValue').value);
+    const hint = document.getElementById('deleteHint');
+    const active = getActiveRows();
+    const activeCount = active.length;
+    if (!activeCount || !val || val <= 0) { hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : ''; return; }
+    if (mode === 'ratio') {
+      const del = Math.max(1, Math.round(activeCount * val / 100));
+      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 删除约 ${del} 行，剩余约 ${activeCount - del} 行`;
+    } else {
+      const del = Math.min(Math.floor(val), activeCount);
+      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 删除 ${del} 行，剩余 ${activeCount - del} 行`;
+    }
   }
 
   // ── Row operations ─────────────────────────────────────────────────────────
@@ -1261,6 +1300,10 @@
     renderPreview();
     updateStep(3);
     updateExportDesc();
+
+    // 刷新保留行/删除行提示（基于过滤后的新有效行数）
+    onKeepModeChange();
+    onDeleteModeChange();
 
     // 提示未命中
     const hint = document.getElementById('idFilterHint');
