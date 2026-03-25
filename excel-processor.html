@@ -500,6 +500,91 @@
       gap: 6px;
     }
 
+    /* ── ID Filter card ── */
+    .op-card.id-filter::before { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+    .badge-id { background: rgba(6,182,212,0.15); color: #06b6d4; border: 1px solid #06b6d4; }
+
+    .id-mode-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .id-mode-btn {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .id-mode-btn:hover { border-color: #06b6d4; color: #06b6d4; }
+    .id-mode-btn.active-keep {
+      background: rgba(6,182,212,0.15);
+      border-color: #06b6d4;
+      color: #06b6d4;
+    }
+    .id-mode-btn.active-delete {
+      background: var(--danger-glow);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .id-textarea-wrap { position: relative; margin-bottom: 12px; }
+    .id-textarea {
+      width: 100%;
+      height: 110px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13px;
+      padding: 10px 12px;
+      resize: vertical;
+      outline: none;
+      font-family: 'Consolas', 'Courier New', monospace;
+      line-height: 1.6;
+      transition: border-color 0.2s;
+    }
+    .id-textarea:focus { border-color: #06b6d4; box-shadow: 0 0 0 3px rgba(6,182,212,0.15); }
+    .id-textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
+    .id-counter {
+      position: absolute;
+      bottom: 8px; right: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .id-filter-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .id-col-select {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .id-col-select select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+    }
+    .id-col-select select:focus { border-color: #06b6d4; }
+    .id-col-select select option { background: var(--surface2); }
+
     /* ── Animations ── */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .card, .op-card { animation: fadeIn 0.4s ease both; }
@@ -642,6 +727,56 @@
           <button class="btn btn-ghost" onclick="hideColumnConfirm()">✕ 取消</button>
         </div>
       </div>
+    </div>
+
+    <!-- ID Filter -->
+    <div class="op-card id-filter" style="grid-column: 1 / -1;">
+      <div class="op-title">
+        <span>🔍</span> Data100ID 匹配过滤
+        <span class="op-badge badge-id">ID过滤</span>
+      </div>
+      <div class="op-desc">
+        批量粘贴 Data100ID，选择"保留匹配"或"删除匹配"模式：<br>
+        <strong>保留匹配</strong>：只保留文件中 ID 在列表内的行（合格ID列表）；<br>
+        <strong>删除匹配</strong>：删除文件中 ID 在列表内的行（不合格ID列表）。ID 默认取 B 列，可自行切换。
+      </div>
+
+      <!-- 模式切换 -->
+      <div class="id-mode-toggle">
+        <div class="id-mode-btn active-keep" id="idModeKeepBtn" onclick="setIdMode('keep')">
+          ✅ 保留匹配（粘贴合格ID）
+        </div>
+        <div class="id-mode-btn" id="idModeDeleteBtn" onclick="setIdMode('delete')">
+          🗑️ 删除匹配（粘贴不合格ID）
+        </div>
+      </div>
+
+      <!-- 粘贴输入框 -->
+      <div class="id-textarea-wrap">
+        <textarea class="id-textarea" id="idInput"
+          placeholder="每行一个 ID，支持直接从 Excel 复制粘贴&#10;例如：&#10;DATA100_001&#10;DATA100_002&#10;DATA100_003"
+          oninput="updateIdCounter()"></textarea>
+        <span class="id-counter" id="idCounter">0 个 ID</span>
+      </div>
+
+      <!-- 底栏：列选择 + 执行按钮 -->
+      <div class="id-filter-footer">
+        <div class="id-col-select">
+          <span>匹配列：</span>
+          <select id="idColSelect">
+            <option value="1">B 列（默认）</option>
+            <option value="0">A 列</option>
+            <option value="2">C 列</option>
+            <option value="3">D 列</option>
+            <option value="4">E 列</option>
+          </select>
+        </div>
+        <button class="btn" id="idFilterBtn"
+          style="background: linear-gradient(135deg,#06b6d4,#0891b2); color:white;"
+          onclick="applyIdFilter()">▶ 执行过滤</button>
+      </div>
+
+      <div id="idFilterHint" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
     </div>
   </div>
 
@@ -1038,6 +1173,106 @@
     updateStep(4);
   }
 
+  // ── ID Filter ──────────────────────────────────────────────────────────────
+  let idFilterMode = 'keep'; // 'keep' | 'delete'
+
+  function setIdMode(mode) {
+    idFilterMode = mode;
+    const keepBtn   = document.getElementById('idModeKeepBtn');
+    const deleteBtn = document.getElementById('idModeDeleteBtn');
+    if (mode === 'keep') {
+      keepBtn.className   = 'id-mode-btn active-keep';
+      deleteBtn.className = 'id-mode-btn';
+    } else {
+      keepBtn.className   = 'id-mode-btn';
+      deleteBtn.className = 'id-mode-btn active-delete';
+    }
+    // 更新输入框 placeholder
+    const ta = document.getElementById('idInput');
+    ta.placeholder = mode === 'keep'
+      ? '粘贴合格 ID（每行一个），文件中不在此列表的行将被删除\n例如：\nDATA100_001\nDATA100_002'
+      : '粘贴不合格 ID（每行一个），文件中匹配的行将被删除\n例如：\nDATA100_099\nDATA100_100';
+    document.getElementById('idFilterHint').textContent = '';
+  }
+
+  function updateIdCounter() {
+    const ids = parseIdList();
+    document.getElementById('idCounter').textContent = ids.length + ' 个 ID';
+  }
+
+  function parseIdList() {
+    const raw = document.getElementById('idInput').value;
+    return raw.split(/[\n\r,，\t]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  function applyIdFilter() {
+    if (!workingRows.length) {
+      showToast('⚠️ 请先上传文件', 'warning'); return;
+    }
+    const ids = parseIdList();
+    if (ids.length === 0) {
+      showToast('⚠️ 请先粘贴 ID 列表', 'warning'); return;
+    }
+
+    const colIdx = parseInt(document.getElementById('idColSelect').value, 10);
+    const idSet  = new Set(ids.map(id => String(id).trim()));
+
+    // 统计
+    let matched = 0, notFound = 0;
+    const activeIndices = getActiveIndices();
+
+    activeIndices.forEach(i => {
+      const cellVal = String(workingRows[i][colIdx] ?? '').trim();
+      const inSet   = idSet.has(cellVal);
+
+      if (idFilterMode === 'keep') {
+        // 保留匹配 → 删除不在列表中的行
+        if (!inSet) {
+          deletedRowIndices.add(i);
+          matched++;
+        }
+      } else {
+        // 删除匹配 → 删除在列表中的行
+        if (inSet) {
+          deletedRowIndices.add(i);
+          matched++;
+        }
+      }
+    });
+
+    // 计算 ID 列表中有多少条在文件里没找到
+    const colValues = new Set(
+      activeIndices.map(i => String(workingRows[i][colIdx] ?? '').trim())
+    );
+    notFound = ids.filter(id => !colValues.has(String(id).trim())).length;
+
+    const colName = ['A','B','C','D','E'][colIdx] || `第${colIdx+1}`;
+    const activeAfter = getActiveRows().length;
+    const modeText = idFilterMode === 'keep' ? '保留匹配行' : '删除匹配行';
+
+    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，操作了 ${matched} 行，剩余 ${activeAfter} 行${notFound > 0 ? `，有 ${notFound} 个ID在文件中未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
+    showToast(`✅ ID过滤完成：${modeText} ${matched} 行，剩余 ${activeAfter} 行`, 'success');
+
+    // ID过滤视为行操作，解锁下载
+    rowOpExecuted = true;
+    updateExportLock();
+    renderPreview();
+    updateStep(3);
+    updateExportDesc();
+
+    // 提示未命中
+    const hint = document.getElementById('idFilterHint');
+    if (notFound > 0) {
+      hint.style.color = 'var(--warning)';
+      hint.textContent = `⚠️ 注意：输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。`;
+    } else {
+      hint.style.color = 'var(--success)';
+      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。`;
+    }
+  }
+
   // ── Reset ──────────────────────────────────────────────────────────────────
   function resetAll() {
     removeFile();
@@ -1046,6 +1281,11 @@
     document.getElementById('keepHint').textContent = '';
     document.getElementById('deleteHint').textContent = '';
     document.getElementById('opLog').innerHTML = '';
+    document.getElementById('idInput').value = '';
+    document.getElementById('idCounter').textContent = '0 个 ID';
+    document.getElementById('idFilterHint').textContent = '';
+    idFilterMode = 'keep';
+    setIdMode('keep');
     showToast('🔄 已重置，请重新上传文件', 'warning');
   }
 
