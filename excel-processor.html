@@ -419,6 +419,8 @@
       text-decoration: line-through;
       opacity: 0.5;
     }
+    tr.row-unqualified td { background: rgba(245,158,11,0.055); }
+    tr.row-unqualified td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
 
     /* ── Operation log ── */
     .op-log {
@@ -585,6 +587,55 @@
     .id-col-select select:focus { border-color: #06b6d4; }
     .id-col-select select option { background: var(--surface2); }
 
+    /* ── Settlement ratio panel ── */
+    .settle-panel {
+      margin-top: 18px;
+      padding: 18px;
+      background: rgba(6,182,212,0.05);
+      border: 1px solid rgba(6,182,212,0.28);
+      border-radius: var(--radius);
+      display: none;
+    }
+    .settle-panel.visible { display: block; animation: fadeIn 0.35s ease both; }
+    .settle-head {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .settle-title { font-size: 14px; font-weight: 700; color: #22d3ee; }
+    .settle-formula {
+      font-size: 11px; color: var(--text-muted);
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 3px 9px; border-radius: 10px;
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+    .settle-stats {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .settle-stat {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 10px 18px;
+      min-width: 92px; text-align: center;
+    }
+    .settle-stat .label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; white-space: nowrap; }
+    .settle-stat .value {
+      font-size: 19px; font-weight: 700; color: var(--text);
+      font-variant-numeric: tabular-nums; line-height: 1.2;
+    }
+    .settle-stat.hl { border-color: rgba(6,182,212,0.45); }
+    .settle-stat.hl .value { color: #22d3ee; }
+    .settle-stat.ratio { border-color: rgba(16,185,129,0.45); background: rgba(16,185,129,0.08); }
+    .settle-stat.ratio .value { color: #34d399; font-size: 22px; }
+    .settle-op { font-size: 17px; font-weight: 700; color: var(--text-muted); }
+    .settle-extra { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; line-height: 1.7; }
+    .settle-adjust {
+      display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+      padding-top: 14px; margin-top: 12px; border-top: 1px dashed var(--border);
+    }
+    .settle-hint { font-size: 12px; margin-top: 10px; line-height: 1.7; color: var(--text-muted); }
+    .settle-hint.ok { color: #34d399; }
+    .settle-hint.warn { color: var(--warning); }
+
     /* ── Animations ── */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .card, .op-card { animation: fadeIn 0.4s ease both; }
@@ -668,8 +719,9 @@
       </div>
       <div class="op-desc">
         批量粘贴 Data100ID，选择"保留匹配"或"删除匹配"模式：<br>
-        <strong>保留匹配</strong>：只保留文件中 ID 在列表内的行（合格ID列表）；<br>
-        <strong>删除匹配</strong>：删除文件中 ID 在列表内的行（不合格ID列表）。ID 默认取 B 列，可自行切换。
+        <strong>保留匹配</strong>：ID 在列表内的行视为<strong>合格</strong>；<br>
+        <strong>删除匹配</strong>：ID 在列表内的行视为<strong>不合格</strong>（粘贴不合格ID，反推合格行）。ID 默认取 B 列，可自行切换。<br>
+        执行后会自动计算并显示<strong>结算比例（总合格 ÷ 总完成）</strong>，不满意可再输入目标比例重新过滤。
       </div>
 
       <!-- 模式切换 -->
@@ -694,7 +746,7 @@
       <div class="id-filter-footer">
         <div class="id-col-select">
           <span>匹配列：</span>
-          <select id="idColSelect">
+          <select id="idColSelect" onchange="invalidateIdCtx()">
             <option value="1">B 列（默认）</option>
             <option value="0">A 列</option>
             <option value="2">C 列</option>
@@ -708,6 +760,46 @@
       </div>
 
       <div id="idFilterHint" style="font-size:12px; color:var(--text-muted); margin-top:10px;"></div>
+
+      <!-- 结算比例面板 -->
+      <div class="settle-panel" id="settlePanel">
+        <div class="settle-head">
+          <span class="settle-title">💰 结算比例</span>
+          <span class="settle-formula">总合格 ÷ 总结算行数 × 100%</span>
+        </div>
+
+        <div class="settle-stats">
+          <div class="settle-stat hl">
+            <div class="label">总合格</div>
+            <div class="value" id="settleQualified">-</div>
+          </div>
+          <div class="settle-op">÷</div>
+          <div class="settle-stat">
+            <div class="label">总完成</div>
+            <div class="value" id="settleTotal">-</div>
+          </div>
+          <div class="settle-op">=</div>
+          <div class="settle-stat ratio">
+            <div class="label">结算比例</div>
+            <div class="value" id="settleRatio">-</div>
+          </div>
+        </div>
+
+        <div class="settle-extra" id="settleExtra"></div>
+        <div class="settle-extra" id="settleRange"></div>
+
+        <div class="settle-adjust">
+          <div class="input-group" style="flex:0 0 170px;">
+            <label>目标结算比例 (%)</label>
+            <input type="number" id="targetRatioInput" min="0.01" max="100" step="0.1"
+              placeholder="例如：90" oninput="updateRatioPreview()" />
+          </div>
+          <button class="btn" style="background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;"
+            onclick="applyTargetRatio()">▶ 按目标比例过滤</button>
+          <button class="btn btn-ghost" onclick="resetRatioAdjust()">↩ 还原（全部保留）</button>
+        </div>
+        <div class="settle-hint" id="settleHint"></div>
+      </div>
     </div>
 
     <!-- Keep rows -->
@@ -805,7 +897,7 @@
       </table>
     </div>
     <p style="font-size:12px; color: var(--text-muted); margin-top: 10px; text-align: right;">
-      📌 预览最多显示 200 行；红色划线行为已标记删除行（不会出现在导出文件中）
+      📌 预览最多显示 200 行；<span style="color:var(--warning)">淡黄底 = ID 过滤判定的不合格行</span>；<span style="color:var(--danger)">红色划线 = 已删除行（不会出现在导出文件中）</span>
     </p>
   </div>
 
@@ -841,6 +933,10 @@
   // 是否已执行行操作（保留或删除行），控制下载解锁
   // 注意：列操作不算，必须执行行操作才能下载
   let rowOpExecuted = false;
+
+  // 结算比例上下文：记录最近一次 ID 过滤的合格/不合格行索引
+  // { qualifiedIdx:[], unqualifiedIdx:[], total:N, colIdx, mode }
+  let idCtx = null;
 
   // ── File upload ────────────────────────────────────────────────────────────
   const uploadZone = document.getElementById('uploadZone');
@@ -882,6 +978,10 @@
         deletedCols = false;
         rowOpChosen = 'none';
         rowOpExecuted = false;
+        idCtx = null;
+        document.getElementById('settlePanel').classList.remove('visible');
+        document.getElementById('targetRatioInput').value = '';
+        document.getElementById('settleHint').textContent = '';
 
         document.getElementById('fileInfo').style.display = 'flex';
         document.getElementById('fileName').textContent = file.name;
@@ -915,6 +1015,9 @@
     document.getElementById('exportSection').style.display = 'none';
     headers = []; workingRows = []; deletedRowIndices = new Set(); deletedCols = false;
     rowOpChosen = 'none'; rowOpExecuted = false;
+    idCtx = null;
+    const settlePanel = document.getElementById('settlePanel');
+    if (settlePanel) settlePanel.classList.remove('visible');
     updateRowOpMutex();
     updateExportLock();
     updateStep(1);
@@ -1139,9 +1242,11 @@
     // Body (最多200行)
     const tbody = document.getElementById('tableBody');
     const displayRows = workingRows.slice(0, 200);
+    const unqSet = idCtx ? new Set(idCtx.unqualifiedIdx) : null;
     tbody.innerHTML = displayRows.map((row, i) => {
       const isDeleted = deletedRowIndices.has(i);
-      const trCls = isDeleted ? 'class="row-deleted"' : '';
+      const isUnq = unqSet && unqSet.has(i);
+      const trCls = isDeleted ? 'class="row-deleted"' : (isUnq ? 'class="row-unqualified"' : '');
       const cells = row.slice(0, headers.length)
         .map((cell, ci) => {
           const tdCls = highlightCols && ci >= KEEP_COLS ? 'style="color:var(--danger);opacity:.5;text-decoration:line-through;"' : '';
@@ -1229,9 +1334,23 @@
     // 更新输入框 placeholder
     const ta = document.getElementById('idInput');
     ta.placeholder = mode === 'keep'
-      ? '粘贴合格 ID（每行一个），文件中不在此列表的行将被删除\n例如：\nDATA100_001\nDATA100_002'
-      : '粘贴不合格 ID（每行一个），文件中匹配的行将被删除\n例如：\nDATA100_099\nDATA100_100';
+      ? '粘贴合格 ID（每行一个），不符合的ID会被标记为不合格行\n例如：\nDATA100_001\nDATA100_002'
+      : '粘贴不合格 ID（每行一个），匹配到的行会被标记为不合格行\n例如：\nDATA100_099\nDATA100_100';
     document.getElementById('idFilterHint').textContent = '';
+    // 模式变了，旧的过滤结果作废
+    invalidateIdCtx();
+  }
+
+  // 判定条件变化（模式/匹配列）后，清空结算比例上下文
+  function invalidateIdCtx() {
+    if (!idCtx) return;
+    idCtx = null;
+    const panel = document.getElementById('settlePanel');
+    if (panel) panel.classList.remove('visible');
+    const hint = document.getElementById('settleHint');
+    if (hint) { hint.textContent = ''; hint.className = 'settle-hint'; }
+    const tr = document.getElementById('targetRatioInput');
+    if (tr) tr.value = '';
   }
 
   function updateIdCounter() {
@@ -1258,50 +1377,52 @@
     const colIdx = parseInt(document.getElementById('idColSelect').value, 10);
     const idSet  = new Set(ids.map(id => String(id).trim()));
 
-    // 统计
-    let matched = 0, notFound = 0;
-    const activeIndices = getActiveIndices();
-
-    activeIndices.forEach(i => {
-      const cellVal = String(workingRows[i][colIdx] ?? '').trim();
+    // 构建合格 / 不合格行索引
+    // 保留匹配：ID 在列表内 = 合格；删除匹配：ID 不在列表内 = 合格
+    const qualifiedIdx = [], unqualifiedIdx = [];
+    workingRows.forEach((row, i) => {
+      const cellVal = String(row[colIdx] ?? '').trim();
       const inSet   = idSet.has(cellVal);
-
-      if (idFilterMode === 'keep') {
-        // 保留匹配 → 删除不在列表中的行
-        if (!inSet) {
-          deletedRowIndices.add(i);
-          matched++;
-        }
-      } else {
-        // 删除匹配 → 删除在列表中的行
-        if (inSet) {
-          deletedRowIndices.add(i);
-          matched++;
-        }
-      }
+      const isQualified = idFilterMode === 'keep' ? inSet : !inSet;
+      if (isQualified) qualifiedIdx.push(i);
+      else unqualifiedIdx.push(i);
     });
+
+    idCtx = {
+      qualifiedIdx,
+      unqualifiedIdx,
+      total: workingRows.length,
+      colIdx,
+      mode: idFilterMode
+    };
+
+    // 默认不改动任何行（全部保留），删除量由「目标比例」决定
+    deletedRowIndices.clear();
 
     // 计算 ID 列表中有多少条在文件里没找到
     const colValues = new Set(
-      activeIndices.map(i => String(workingRows[i][colIdx] ?? '').trim())
+      workingRows.map(r => String(r[colIdx] ?? '').trim())
     );
-    notFound = ids.filter(id => !colValues.has(String(id).trim())).length;
+    const notFound = ids.filter(id => !colValues.has(String(id).trim())).length;
 
     const colName = ['A','B','C','D','E'][colIdx] || `第${colIdx+1}`;
-    const activeAfter = getActiveRows().length;
+    const A = qualifiedIdx.length;
+    const N = workingRows.length;
+    const ratio = N ? A / N * 100 : 0;
     const modeText = idFilterMode === 'keep' ? '保留匹配行' : '删除匹配行';
 
-    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，操作了 ${matched} 行，剩余 ${activeAfter} 行${notFound > 0 ? `，有 ${notFound} 个ID在文件中未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
-    showToast(`✅ ID过滤完成：${modeText} ${matched} 行，剩余 ${activeAfter} 行`, 'success');
+    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，合格 ${A} 行 / 总完成 ${N} 行，结算比例 ${fmtPct(ratio)}${notFound > 0 ? `，有 ${notFound} 个ID未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
+    showToast(`💰 结算比例 ${fmtPct(ratio)}（合格 ${A} / 总完成 ${N}）`, A > 0 ? 'success' : 'warning');
 
     // ID过滤视为行操作，解锁下载
     rowOpExecuted = true;
     updateExportLock();
     renderPreview();
+    renderSettle();
     updateStep(3);
     updateExportDesc();
 
-    // 刷新保留行/删除行提示（基于过滤后的新有效行数）
+    // 刷新保留行 / 删除行提示（基于过滤后的有效行数）
     onKeepModeChange();
     onDeleteModeChange();
 
@@ -1309,11 +1430,143 @@
     const hint = document.getElementById('idFilterHint');
     if (notFound > 0) {
       hint.style.color = 'var(--warning)';
-      hint.textContent = `⚠️ 注意：输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。`;
+      hint.textContent = `⚠️ 输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。当前未删除任何行，如需调整结算比例请在下方输入目标比例。`;
     } else {
       hint.style.color = 'var(--success)';
-      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。`;
+      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。当前未删除任何行，如需调整结算比例请在下方输入目标比例。`;
     }
+  }
+
+  // ── 结算比例 ────────────────────────────────────────────────────────────────
+  function fmtPct(x) { return (Math.round(x * 100) / 100).toFixed(2) + '%'; }
+
+  // 当前实际交付行数（合格行全保留 + 未被删除的不合格行）
+  function getDeliveredCount() {
+    if (!idCtx) return 0;
+    const keptBad = idCtx.unqualifiedIdx.filter(i => !deletedRowIndices.has(i)).length;
+    return idCtx.qualifiedIdx.length + keptBad;
+  }
+
+  function renderSettle() {
+    const panel = document.getElementById('settlePanel');
+    if (!idCtx) { panel.classList.remove('visible'); return; }
+    panel.classList.add('visible');
+
+    const A = idCtx.qualifiedIdx.length;
+    const total = idCtx.total;
+    const T = getDeliveredCount();
+    const ratio = T ? A / T * 100 : 0;
+    const baseRatio = total ? A / total * 100 : 0;
+
+    document.getElementById('settleQualified').textContent = A;
+    document.getElementById('settleTotal').textContent = T;
+    document.getElementById('settleRatio').textContent = fmtPct(ratio);
+
+    document.getElementById('settleExtra').textContent = (T === total)
+      ? `原始文件共 ${total} 行 · 当前全部保留（交付 ${T} 行）→ 如需减少交付行数，输入目标比例后点「按目标比例过滤」`
+      : `原始文件共 ${total} 行 → 当前交付 ${T} 行（合格 ${A} + 不合格 ${T - A}，已删 ${total - T} 行）`;
+
+    document.getElementById('settleRange').textContent =
+      `可调范围：${fmtPct(baseRatio)}（全部保留，下限） ~ 100.00%（只留合格行，上限）`;
+  }
+
+  // 输入目标比例时的实时预览
+  function updateRatioPreview() {
+    const hint = document.getElementById('settleHint');
+    if (!idCtx) { hint.textContent = ''; hint.className = 'settle-hint'; return; }
+
+    const A = idCtx.qualifiedIdx.length;
+    const N = idCtx.total;
+    const baseRatio = N ? A / N * 100 : 0;
+    const raw = document.getElementById('targetRatioInput').value;
+    const X = parseFloat(raw);
+
+    hint.className = 'settle-hint';
+    if (!raw || !X || X <= 0) { hint.textContent = ''; return; }
+
+    if (X > 100) {
+      hint.className = 'settle-hint warn';
+      hint.textContent = '⚠️ 目标比例不能超过 100%';
+      return;
+    }
+    if (!A) {
+      hint.className = 'settle-hint warn';
+      hint.textContent = '⚠️ 合格行为 0，无法计算比例，请检查 ID 列表与匹配列';
+      return;
+    }
+    if (X < baseRatio - 1e-9) {
+      hint.className = 'settle-hint warn';
+      hint.textContent = `⚠️ 不可达：合格行只有 ${A} 行，即使一行不删，比例下限也是 ${fmtPct(baseRatio)}（= ${A}÷${N}）。想把比例降到更低，只能减少合格行，属于「保留行/删除行」操作范畴。`;
+      return;
+    }
+
+    const T = Math.min(N, Math.max(A, Math.round(A * 100 / X)));
+    const keepBad = T - A;
+    const actual = A / T * 100;
+    hint.className = 'settle-hint ok';
+    hint.textContent = `预计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBad}（删除 ${N - T} 行不合格数据）→ 实际结算比例 ${fmtPct(actual)}`;
+  }
+
+  function applyTargetRatio() {
+    if (!idCtx) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
+
+    const raw = document.getElementById('targetRatioInput').value;
+    const X = parseFloat(raw);
+    if (!raw || !X || X <= 0 || X > 100) {
+      showToast('⚠️ 请输入 0~100 之间的目标比例', 'warning'); return;
+    }
+
+    const A = idCtx.qualifiedIdx.length;
+    const N = idCtx.total;
+    const baseRatio = N ? A / N * 100 : 0;
+
+    if (!A) { showToast('⚠️ 合格行为 0，请检查 ID 列表与匹配列', 'warning'); return; }
+    if (X < baseRatio - 1e-9) {
+      showToast(`⚠️ 目标 ${fmtPct(X)} 低于下限 ${fmtPct(baseRatio)}，无法实现（合格行只有 ${A} 行）`, 'warning');
+      return;
+    }
+
+    // 需要的交付总行数：合格行全保留，用不合格行补足
+    let T = Math.round(A * 100 / X);
+    T = Math.min(N, Math.max(A, T));
+    const keepBad = T - A;
+
+    // 重建 ID 过滤层的删除标记
+    idCtx.qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
+    idCtx.unqualifiedIdx.forEach(i => deletedRowIndices.add(i));
+    if (keepBad > 0) {
+      shuffle([...idCtx.unqualifiedIdx]).slice(0, keepBad).forEach(i => deletedRowIndices.delete(i));
+    }
+
+    const ratio = A / T * 100;
+    log(`按目标比例过滤：目标 ${fmtPct(X)} → 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），删除 ${N - T} 行，实际结算比例 ${fmtPct(ratio)}`, 'success');
+    showToast(`✅ 交付 ${T} 行，实际结算比例 ${fmtPct(ratio)}`, 'success');
+
+    rowOpExecuted = true;
+    updateExportLock();
+    renderPreview();
+    renderSettle();
+    updateExportDesc();
+    updateStep(3);
+    updateRatioPreview();
+    onKeepModeChange();
+    onDeleteModeChange();
+  }
+
+  // 还原：不删除任何行（比例回到全部保留时的水平）
+  function resetRatioAdjust() {
+    if (!idCtx) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
+    idCtx.qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
+    idCtx.unqualifiedIdx.forEach(i => deletedRowIndices.delete(i));
+    document.getElementById('targetRatioInput').value = '';
+    log('已还原：ID 过滤层不做任何删除，全部行保留', 'warning');
+    showToast('↩️ 已还原，全部行保留', 'warning');
+    renderPreview();
+    renderSettle();
+    updateExportDesc();
+    updateRatioPreview();
+    onKeepModeChange();
+    onDeleteModeChange();
   }
 
   // ── Reset ──────────────────────────────────────────────────────────────────
@@ -1327,6 +1580,10 @@
     document.getElementById('idInput').value = '';
     document.getElementById('idCounter').textContent = '0 个 ID';
     document.getElementById('idFilterHint').textContent = '';
+    document.getElementById('targetRatioInput').value = '';
+    document.getElementById('settleHint').textContent = '';
+    document.getElementById('settleHint').className = 'settle-hint';
+    idCtx = null;
     idFilterMode = 'keep';
     setIdMode('keep');
     showToast('🔄 已重置，请重新上传文件', 'warning');
