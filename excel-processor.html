@@ -860,10 +860,11 @@
         将只保留 A、B、C、D、E 共 5 列（列索引 0–4），从第 6 列起（F 列及以后）全部删除。
         此操作不可撤销，请确认后执行。
       </div>
-      <button class="btn btn-warning" onclick="showColumnConfirm()">预览并确认删除</button>
+      <button class="btn btn-warning" onclick="showColumnConfirm()">✂️ 预览并确认删除</button>
 
       <div class="confirm-section" id="columnConfirm">
         <p>⚠️ 即将删除 F 列及以后的所有列，仅保留 A–E 列，已删除的列会以红色标注预览。确认执行吗？</p>
+        <div id="colDelList" style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.9;"></div>
         <div class="confirm-btns">
           <button class="btn btn-danger" onclick="applyColumnDelete()">✓ 确认删除</button>
           <button class="btn btn-ghost" onclick="hideColumnConfirm()">✕ 取消</button>
@@ -1192,11 +1193,37 @@
   const KEEP_COLS = 5;
 
   function showColumnConfirm() {
+    const box = document.getElementById('columnConfirm');
+    const listEl = document.getElementById('colDelList');
+    const confirmBtn = box.querySelector('.btn-danger');
+
     if (headers.length <= KEEP_COLS) {
-      showToast(`ℹ️ 当前表格列数 ≤ ${KEEP_COLS}（E列），无需删除`, 'warning'); return;
+      listEl.innerHTML = `<span style="color:var(--warning)">⚠️ 当前表格只有 ${headers.length} 列，已经在 A–E 之内，没有需要删除的列。</span>`;
+      confirmBtn.style.display = 'none';
+      box.classList.add('visible');
+      safeScroll(box);
+      return;
     }
-    document.getElementById('columnConfirm').classList.add('visible');
+
+    const del = headers.slice(KEEP_COLS);
+    listEl.innerHTML = `将删除 <b style="color:var(--danger)">${del.length}</b> 列（共 ${headers.length} 列 → 保留 5 列）：<br>`
+      + del.map((h, i) => `<span style="color:var(--danger)">${colLetter(KEEP_COLS + i)}</span>${h ? '（' + h + '）' : ''}`).join('、');
+
+    confirmBtn.style.display = '';
+    confirmBtn.textContent = `✓ 确认删除这 ${del.length} 列`;
+    box.classList.add('visible');
     renderPreview(true);
+    safeScroll(box);
+  }
+
+  function safeScroll(el) {
+    try { if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* 忽略 */ }
+  }
+
+  function colLetter(i) {
+    let s = '', n = i;
+    do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+    return s;
   }
 
   function hideColumnConfirm() {
@@ -1397,7 +1424,10 @@
     };
 
     // 默认不改动任何行（全部保留），删除量由「目标比例」决定
+    // 执行过滤：不合格行直接标记删除（预览中标红），只保留合格行
     deletedRowIndices.clear();
+    qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
+    unqualifiedIdx.forEach(i => deletedRowIndices.add(i));
 
     // 计算 ID 列表中有多少条在文件里没找到
     const colValues = new Set(
@@ -1411,8 +1441,8 @@
     const ratio = N ? A / N * 100 : 0;
     const modeText = idFilterMode === 'keep' ? '保留匹配行' : '删除匹配行';
 
-    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，合格 ${A} 行 / 总完成 ${N} 行，结算比例 ${fmtPct(ratio)}${notFound > 0 ? `，有 ${notFound} 个ID未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
-    showToast(`💰 结算比例 ${fmtPct(ratio)}（合格 ${A} / 总完成 ${N}）`, A > 0 ? 'success' : 'warning');
+    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，识别合格 ${A} 行、不合格 ${N - A} 行（已删除 ${N - A} 行），总完成 ${N} 行，结算比例 ${fmtPct(ratio)}${notFound > 0 ? `，有 ${notFound} 个ID未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
+    showToast(`✅ 已过滤：合格 ${A} 行 / 总完成 ${N} 行，结算比例 ${fmtPct(ratio)}`, A > 0 ? 'success' : 'warning');
 
     // ID过滤视为行操作，解锁下载
     rowOpExecuted = true;
@@ -1430,10 +1460,10 @@
     const hint = document.getElementById('idFilterHint');
     if (notFound > 0) {
       hint.style.color = 'var(--warning)';
-      hint.textContent = `⚠️ 输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。当前未删除任何行，如需调整结算比例请在下方输入目标比例。`;
+      hint.textContent = `⚠️ 输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。已删除 ${N - A} 行不合格数据，预览中红色划线即为被删除的行。`;
     } else {
       hint.style.color = 'var(--success)';
-      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。当前未删除任何行，如需调整结算比例请在下方输入目标比例。`;
+      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。已删除 ${N - A} 行不合格数据，预览中红色划线即为被删除的行。`;
     }
   }
 
@@ -1455,19 +1485,24 @@
     const A = idCtx.qualifiedIdx.length;
     const total = idCtx.total;
     const T = getDeliveredCount();
-    const ratio = T ? A / T * 100 : 0;
     const baseRatio = total ? A / total * 100 : 0;
+    const deliverRatio = T ? A / T * 100 : 0;
 
+    // 主口径固定：总合格 ÷ 原始总完成
     document.getElementById('settleQualified').textContent = A;
-    document.getElementById('settleTotal').textContent = T;
-    document.getElementById('settleRatio').textContent = fmtPct(ratio);
+    document.getElementById('settleTotal').textContent = total;
+    document.getElementById('settleRatio').textContent = fmtPct(baseRatio);
 
-    document.getElementById('settleExtra').textContent = (T === total)
-      ? `原始文件共 ${total} 行 · 当前全部保留（交付 ${T} 行）→ 如需减少交付行数，输入目标比例后点「按目标比例过滤」`
-      : `原始文件共 ${total} 行 → 当前交付 ${T} 行（合格 ${A} + 不合格 ${T - A}，已删 ${total - T} 行）`;
+    const extra = document.getElementById('settleExtra');
+    if (T === total) {
+      extra.innerHTML = `原始文件共 <b>${total}</b> 行 · 当前全部保留（交付 ${total} 行，未删除任何行）`;
+    } else {
+      extra.innerHTML = `原始文件共 <b>${total}</b> 行 · 已删除 <b>${total - T}</b> 行 → 当前交付 <b>${T}</b> 行`
+        + `（合格 ${A} + 不合格 ${T - A}）· 交付文件合格占比 <b style="color:#34d399">${fmtPct(deliverRatio)}</b>`;
+    }
 
     document.getElementById('settleRange').textContent =
-      `可调范围：${fmtPct(baseRatio)}（全部保留，下限） ~ 100.00%（只留合格行，上限）`;
+      `可调范围：${fmtPct(baseRatio)}（全部保留） ~ 100.00%（只留合格行）；输入目标比例 = 想要交付文件里的合格占比`;
   }
 
   // 输入目标比例时的实时预览
@@ -1504,7 +1539,7 @@
     const keepBad = T - A;
     const actual = A / T * 100;
     hint.className = 'settle-hint ok';
-    hint.textContent = `预计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBad}（删除 ${N - T} 行不合格数据）→ 实际结算比例 ${fmtPct(actual)}`;
+    hint.textContent = `预计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBad}（从原文件中恢复 ${keepBad} 行不合格数据、删除 ${N - T} 行）→ 交付文件合格占比 ${fmtPct(actual)}`;
   }
 
   function applyTargetRatio() {
@@ -1539,8 +1574,8 @@
     }
 
     const ratio = A / T * 100;
-    log(`按目标比例过滤：目标 ${fmtPct(X)} → 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），删除 ${N - T} 行，实际结算比例 ${fmtPct(ratio)}`, 'success');
-    showToast(`✅ 交付 ${T} 行，实际结算比例 ${fmtPct(ratio)}`, 'success');
+    log(`按目标比例过滤：目标 ${fmtPct(X)} → 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），删除 ${N - T} 行，交付文件合格占比 ${fmtPct(ratio)}`, 'success');
+    showToast(`✅ 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），合格占比 ${fmtPct(ratio)}`, 'success');
 
     rowOpExecuted = true;
     updateExportLock();
