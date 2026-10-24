@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Excel 数据处理工具</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     :root {
       --bg: #0f1117;
@@ -185,31 +186,114 @@
     .upload-zone p { font-size: 13px; color: var(--text-muted); }
     #fileInput { display: none; }
 
-    /* ── File info ── */
-    .file-info {
+    /* ── File list (multi) ── */
+    .file-summary {
+      margin-top: 16px;
+      padding: 12px 18px;
       background: var(--surface2);
+      border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .file-summary b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .file-summary .fs-sep { width: 1px; height: 14px; background: var(--border); }
+
+    .file-list {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .file-row {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-top: 12px;
-    }
-    .file-info .file-icon {
-      font-size: 24px;
-      flex-shrink: 0;
-    }
-    .file-info .file-details { flex: 1; min-width: 0; }
-    .file-info .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .file-info .file-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .file-info .remove-btn {
-      background: none; border: none;
-      color: var(--text-muted); cursor: pointer;
-      font-size: 18px; padding: 4px 8px;
-      border-radius: 6px;
+      cursor: pointer;
       transition: all 0.2s;
     }
-    .file-info .remove-btn:hover { color: var(--danger); background: var(--danger-glow); }
+    .file-row:hover { border-color: var(--border-hover); }
+    .file-row.active { border-color: var(--accent); background: rgba(99,102,241,0.09); }
+    .file-row .file-icon { font-size: 22px; flex-shrink: 0; }
+    .file-row .file-details { flex: 1; min-width: 0; }
+    .file-row .file-name {
+      font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .file-row .file-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .file-row .file-stats { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .fr-chip {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .fr-chip.ok { border-color: rgba(16,185,129,0.5); color: #34d399; background: rgba(16,185,129,0.1); }
+    .fr-chip.warn { border-color: rgba(245,158,11,0.5); color: var(--warning); background: rgba(245,158,11,0.1); }
+    .fr-chip.idle { opacity: 0.6; }
+    .file-row .remove-btn {
+      background: none; border: none;
+      color: var(--text-muted); cursor: pointer;
+      font-size: 16px; padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .file-row .remove-btn:hover { color: var(--danger); background: var(--danger-glow); }
+    .cur-tag {
+      font-size: 10px; font-weight: 700;
+      background: var(--accent); color: white;
+      padding: 2px 7px; border-radius: 10px;
+      letter-spacing: .3px;
+    }
+
+    /* ── Scope bar ── */
+    .scope-bar {
+      margin-top: 16px;
+      padding: 14px 18px;
+      background: rgba(6,182,212,0.05);
+      border: 1px solid rgba(6,182,212,0.28);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .scope-label { font-size: 13px; font-weight: 700; color: #22d3ee; }
+    .scope-toggle {
+      display: flex; gap: 6px;
+      background: var(--bg); padding: 4px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .scope-btn {
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .scope-btn:hover:not(.active) { color: var(--text); }
+    .scope-btn.active { background: linear-gradient(135deg, #06b6d4, #0891b2); color: white; }
+    .scope-hint { font-size: 12px; color: var(--text-muted); }
+    .scope-hint b { color: #22d3ee; }
 
     /* ── Grid layout for operations ── */
     .ops-grid {
@@ -361,9 +445,11 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 14px;
+      gap: 12px;
+      flex-wrap: wrap;
     }
-    .preview-title { font-size: 15px; font-weight: 700; }
-    .preview-stats { display: flex; gap: 12px; }
+    .preview-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .preview-stats { display: flex; gap: 12px; flex-wrap: wrap; }
     .stat-chip {
       background: var(--surface2);
       border: 1px solid var(--border);
@@ -429,7 +515,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       padding: 14px;
-      max-height: 140px;
+      max-height: 180px;
       overflow-y: auto;
       font-family: 'Consolas', 'Courier New', monospace;
       font-size: 12px;
@@ -452,15 +538,25 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 22px 28px;
       margin-top: 28px;
+      flex-wrap: wrap;
     }
     .export-info h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
     .export-info p { font-size: 13px; color: var(--text-muted); }
-    .export-actions { display: flex; gap: 12px; }
+    .export-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .export-locked-tip {
+      font-size: 12px;
+      color: var(--warning);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     /* ── Disabled op-card ── */
     .op-card.disabled {
@@ -492,14 +588,6 @@
       cursor: not-allowed !important;
       transform: none !important;
       border: 1px dashed var(--border);
-    }
-    .export-locked-tip {
-      font-size: 12px;
-      color: var(--warning);
-      margin-top: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }
 
     /* ── ID Filter card ── */
@@ -567,6 +655,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+      flex-wrap: wrap;
     }
     .id-col-select {
       display: flex;
@@ -636,6 +725,30 @@
     .settle-hint.ok { color: #34d399; }
     .settle-hint.warn { color: var(--warning); }
 
+    /* ── Per-file settlement detail table ── */
+    .settle-detail {
+      margin-top: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .settle-detail .sd-head {
+      padding: 9px 14px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+    }
+    .sd-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .sd-table th, .sd-table td { padding: 7px 12px; text-align: left; white-space: nowrap; }
+    .sd-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; font-size: 11px; }
+    .sd-table td { border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
+    .sd-table tr:last-child td { border-bottom: none; }
+    .sd-table tr.total-row td { background: rgba(99,102,241,0.09); font-weight: 700; }
+    .sd-table .sd-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: normal; }
+    .sd-ok { color: #34d399; }
+    .sd-warn { color: var(--warning); }
+    .sd-muted { color: var(--text-muted); }
+
     /* ── Animations ── */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .card, .op-card { animation: fadeIn 0.4s ease both; }
@@ -647,7 +760,9 @@
       main { padding: 20px 16px; }
       header { padding: 16px 20px; }
       .ops-grid { grid-template-columns: 1fr; }
-      .export-section { flex-direction: column; gap: 16px; }
+      .export-section { flex-direction: column; align-items: stretch; }
+      .file-row { flex-wrap: wrap; }
+      .file-row .file-stats { justify-content: flex-start; }
     }
   </style>
 </head>
@@ -657,9 +772,9 @@
   <div class="logo">📊</div>
   <div>
     <h1>Excel 数据处理工具</h1>
-    <div class="subtitle">上传 · 清洗 · 裁剪 · 导出</div>
+    <div class="subtitle">多文件批量 · 上传 · 清洗 · 裁剪 · 导出</div>
   </div>
-  <div class="header-badge">✦ 高级版</div>
+  <div class="header-badge">✦ 批量版</div>
 </header>
 
 <main>
@@ -687,24 +802,33 @@
   <div class="card" id="uploadCard">
     <div class="card-title">
       <div class="icon">📁</div>
-      上传 Excel 文件
+      上传 Excel 文件（支持多文件）
     </div>
-    <div class="card-desc">支持 .xlsx / .xls 格式，文件在本地处理，不会上传到任何服务器</div>
+    <div class="card-desc">
+      支持 .xlsx / .xls，可一次选择多个文件或拖拽多个文件；文件在本地处理，不会上传到任何服务器
+    </div>
 
     <div class="upload-zone" id="uploadZone">
       <span class="upload-icon">📂</span>
-      <h3>拖拽文件到这里，或点击选择</h3>
-      <p>支持 .xlsx · .xls 格式</p>
-      <input type="file" id="fileInput" accept=".xlsx,.xls" />
+      <h3>拖拽文件到这里，或点击选择（可多选）</h3>
+      <p>支持 .xlsx · .xls 格式 · 可一次拖入多个文件</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" multiple />
     </div>
 
-    <div class="file-info" id="fileInfo" style="display:none;">
-      <span class="file-icon">📗</span>
-      <div class="file-details">
-        <div class="file-name" id="fileName">-</div>
-        <div class="file-meta" id="fileMeta">-</div>
+    <!-- 汇总条 -->
+    <div class="file-summary" id="fileSummary" style="display:none;"></div>
+
+    <!-- 文件列表 -->
+    <div class="file-list" id="fileList"></div>
+
+    <!-- 操作范围 -->
+    <div class="scope-bar" id="scopeBar" style="display:none;">
+      <span class="scope-label">操作范围</span>
+      <div class="scope-toggle">
+        <button class="scope-btn active" id="scopeCurrentBtn" onclick="setScope('current')">🎯 当前文件</button>
+        <button class="scope-btn" id="scopeAllBtn" onclick="setScope('all')">📚 全部文件（批量）</button>
       </div>
-      <button class="remove-btn" onclick="removeFile()" title="移除文件">✕</button>
+      <span class="scope-hint" id="scopeHint"></span>
     </div>
   </div>
 
@@ -721,7 +845,8 @@
         批量粘贴 Data100ID，选择"保留匹配"或"删除匹配"模式：<br>
         <strong>保留匹配</strong>：ID 在列表内的行视为<strong>合格</strong>；<br>
         <strong>删除匹配</strong>：ID 在列表内的行视为<strong>不合格</strong>（粘贴不合格ID，反推合格行）。ID 默认取 B 列，可自行切换。<br>
-        执行后会自动计算并显示<strong>结算比例（总合格 ÷ 总完成）</strong>，不满意可再输入目标比例重新过滤。
+        执行后会自动计算并显示<strong>结算比例（总合格 ÷ 总完成）</strong>，不满意可再输入目标比例重新过滤。<br>
+        <span style="color:var(--accent)">📚 批量模式下，同一份 ID 列表会对作用域内的每个文件独立匹配，每个文件单独计算结算比例。</span>
       </div>
 
       <!-- 模式切换 -->
@@ -766,6 +891,7 @@
         <div class="settle-head">
           <span class="settle-title">💰 结算比例</span>
           <span class="settle-formula">总合格 ÷ 总结算行数 × 100%</span>
+          <span class="settle-formula" id="settleScopeTag" style="border-color:#06b6d4;color:#22d3ee;"></span>
         </div>
 
         <div class="settle-stats">
@@ -799,6 +925,31 @@
           <button class="btn btn-ghost" onclick="resetRatioAdjust()">↩ 还原（全部保留）</button>
         </div>
         <div class="settle-hint" id="settleHint"></div>
+
+        <!-- 各文件明细 -->
+        <div class="settle-detail" id="settleDetail" style="display:none;">
+          <div class="sd-head">
+            📊 各文件明细
+            <span style="font-weight:400;color:var(--text-muted);margin-left:8px;">
+              「未命中ID」= 该文件内未出现于ID列表中的条目数。批量模式下各文件共用同一份ID列表，此列仅供参考。
+            </span>
+          </div>
+          <table class="sd-table">
+            <thead>
+              <tr>
+                <th>文件</th>
+                <th>总完成</th>
+                <th>合格</th>
+                <th>不合格</th>
+                <th>结算比例</th>
+                <th>当前交付</th>
+                <th>交付合格占比</th>
+                <th title="该文件内未出现于本列表的 ID 数">未命中ID</th>
+              </tr>
+            </thead>
+            <tbody id="settleDetailBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -884,7 +1035,7 @@
   <!-- Preview -->
   <div class="preview-section card" id="previewSection" style="display:none; margin-top: 24px;">
     <div class="preview-header">
-      <div class="preview-title">📊 数据预览</div>
+      <div class="preview-title" id="previewTitle">📊 数据预览</div>
       <div class="preview-stats">
         <div class="stat-chip">总行数 <span id="statTotal">-</span></div>
         <div class="stat-chip">当前行数 <span id="statCurrent">-</span></div>
@@ -911,7 +1062,8 @@
     </div>
     <div class="export-actions">
       <button class="btn btn-ghost" onclick="resetAll()">🔄 重新开始</button>
-      <button class="btn btn-success locked" id="exportBtn" onclick="exportFile()">🔒 下载处理后的文件</button>
+      <button class="btn btn-ghost locked" id="exportOneBtn" onclick="exportCurrent()">⬇️ 导出当前文件</button>
+      <button class="btn btn-success locked" id="exportBtn" onclick="exportAll()">🔒 批量导出（ZIP）</button>
     </div>
   </div>
 </main>
@@ -921,303 +1073,76 @@
 
 <script>
   // ── State ──────────────────────────────────────────────────────────────────
-  let originalData = [];
-  let headers = [];
-  let workingRows = [];
-  let deletedRowIndices = new Set();
-  let deletedCols = false;
-  let fileName = '';
-  let sheetName = '';
+  // 每个文件一份独立状态，支持多文件批量处理
+  // files[i] = {
+  //   id, name, size, sheetName,
+  //   headers: [], workingRows: [],
+  //   idDeleted: Set,      // ID 过滤判定为不合格而删除的行索引
+  //   rowDeleted: Set,     // 保留/删除行操作删除的行索引
+  //   deletedCols: bool,
+  //   idCtx: null,         // { qualifiedIdx:[], unqualifiedIdx:[], total, colIdx, mode, notFound }
+  //   rowOpChosen: 'none'|'keep'|'delete',
+  //   rowOpExecuted: bool
+  // }
+  let files = [];
+  let currentFileId = null;
+  let fileSeq = 0;
+  let scopeMode = 'current'; // 'current' | 'all'
 
-  // 操作互斥状态：'none' | 'keep' | 'delete'
-  let rowOpChosen = 'none';
+  // 操作互斥状态：'none' | 'keep' | 'delete'（按文件独立记录）
   // 是否已执行行操作（保留或删除行），控制下载解锁
   // 注意：列操作不算，必须执行行操作才能下载
-  let rowOpExecuted = false;
+  let idFilterMode = 'keep'; // 'keep' | 'delete'
 
-  // 结算比例上下文：记录最近一次 ID 过滤的合格/不合格行索引
-  // { qualifiedIdx:[], unqualifiedIdx:[], total:N, colIdx, mode }
-  let idCtx = null;
+  const KEEP_COLS = 5; // 保留前 5 列（A-E）
 
-  // ── File upload ────────────────────────────────────────────────────────────
-  const uploadZone = document.getElementById('uploadZone');
-  const fileInput  = document.getElementById('fileInput');
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
 
-  uploadZone.addEventListener('click', () => fileInput.click());
-  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
-  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-  uploadZone.addEventListener('drop', e => {
-    e.preventDefault();
-    uploadZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  });
-  fileInput.addEventListener('change', e => {
-    if (e.target.files[0]) processFile(e.target.files[0]);
-  });
-
-  function processFile(file) {
-    if (!file.name.match(/\.(xlsx|xls)$/i)) {
-      showToast('❌ 仅支持 .xlsx / .xls 格式', 'error'); return;
-    }
-    fileName = file.name;
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: 'array' });
-        sheetName = wb.SheetNames[0];
-        const ws = wb.Sheets[sheetName];
-        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (!raw || raw.length < 2) { showToast('⚠️ 表格数据为空或仅有表头', 'warning'); return; }
-
-        headers = raw[0].map(h => String(h));
-        workingRows = raw.slice(1).map(r => {
-          while (r.length < headers.length) r.push('');
-          return [...r];
-        });
-        deletedRowIndices = new Set();
-        deletedCols = false;
-        rowOpChosen = 'none';
-        rowOpExecuted = false;
-        idCtx = null;
-        document.getElementById('settlePanel').classList.remove('visible');
-        document.getElementById('targetRatioInput').value = '';
-        document.getElementById('settleHint').textContent = '';
-
-        document.getElementById('fileInfo').style.display = 'flex';
-        document.getElementById('fileName').textContent = file.name;
-        document.getElementById('fileMeta').textContent =
-          `大小: ${(file.size/1024).toFixed(1)} KB · Sheet: ${sheetName} · ${workingRows.length} 行数据 · ${headers.length} 列`;
-
-        document.getElementById('opsSection').style.display = 'grid';
-        document.getElementById('logSection').style.display = 'block';
-        document.getElementById('exportSection').style.display = 'flex';
-        updateRowOpMutex();
-        updateExportLock();
-        updateStep(2);
-        renderPreview();
-        onKeepModeChange();
-        onDeleteModeChange();
-        log(`文件载入成功：${file.name}，共 ${workingRows.length} 行，${headers.length} 列`, 'success');
-        showToast(`✅ 成功读取 ${workingRows.length} 行数据`, 'success');
-      } catch(err) {
-        showToast('❌ 解析失败：' + err.message, 'error');
-      }
-    };
-    reader.readAsArrayBuffer(file);
+  function currentFile() {
+    return files.find(f => f.id === currentFileId) || files[0] || null;
   }
 
-  function removeFile() {
-    fileInput.value = '';
-    document.getElementById('fileInfo').style.display = 'none';
-    document.getElementById('opsSection').style.display = 'none';
-    document.getElementById('logSection').style.display = 'none';
-    document.getElementById('previewSection').style.display = 'none';
-    document.getElementById('exportSection').style.display = 'none';
-    headers = []; workingRows = []; deletedRowIndices = new Set(); deletedCols = false;
-    rowOpChosen = 'none'; rowOpExecuted = false;
-    idCtx = null;
-    const settlePanel = document.getElementById('settlePanel');
-    if (settlePanel) settlePanel.classList.remove('visible');
-    updateRowOpMutex();
-    updateExportLock();
-    updateStep(1);
+  // 当前作用域内的文件集合
+  function scopeFiles() {
+    if (scopeMode === 'all') return files.slice();
+    const c = currentFile();
+    return c ? [c] : [];
   }
 
-  // ── Mode change hints ──────────────────────────────────────────────
-  function onKeepModeChange() {
-    const mode = document.getElementById('keepMode').value;
-    const label = document.getElementById('keepInputLabel');
-    const input = document.getElementById('keepValue');
-    const hint  = document.getElementById('keepHint');
-    const active = getActiveRows();
-    const activeCount = active.length;
-    if (mode === 'ratio') {
-      label.textContent = '保留比例 (%)';
-      input.placeholder = '例如：30  表示保留30%';
-      input.min = '1'; input.max = '100';
-      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入30则保留约 ${Math.round(activeCount*0.3)} 行` : '';
-    } else {
-      label.textContent = '保留行数';
-      input.placeholder = `例如：100（当前有效行数：${activeCount || '-'}）`;
-      input.removeAttribute('max');
-      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '';
-    }
-    input.value = '';
+  function scopeLabel() {
+    return scopeMode === 'all' ? `全部 ${files.length} 个文件` : `当前文件`;
   }
 
-  function onDeleteModeChange() {
-    const mode = document.getElementById('deleteMode').value;
-    const label = document.getElementById('deleteInputLabel');
-    const input = document.getElementById('deleteValue');
-    const hint  = document.getElementById('deleteHint');
-    const active = getActiveRows();
-    const activeCount = active.length;
-    if (mode === 'ratio') {
-      label.textContent = '删除比例 (%)';
-      input.placeholder = '例如：20  表示删除20%';
-      input.min = '1'; input.max = '100';
-      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入20则删除约 ${Math.round(activeCount*0.2)} 行` : '';
-    } else {
-      label.textContent = '删除行数';
-      input.placeholder = `例如：50（当前有效行数：${activeCount || '-'}）`;
-      input.removeAttribute('max');
-      hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '';
-    }
-    input.value = '';
+  // 行的删除状态 = ID过滤删除 ∪ 行操作删除
+  function isRowDeleted(f, i) {
+    return f.idDeleted.has(i) || f.rowDeleted.has(i);
   }
 
-  // 实时输入时更新提示（基于有效行数）
-  function onKeepInputChange() {
-    const mode = document.getElementById('keepMode').value;
-    const val  = parseFloat(document.getElementById('keepValue').value);
-    const hint = document.getElementById('keepHint');
-    const active = getActiveRows();
-    const activeCount = active.length;
-    if (!activeCount || !val || val <= 0) { hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : ''; return; }
-    if (mode === 'ratio') {
-      const keep = Math.max(1, Math.round(activeCount * val / 100));
-      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 保留约 ${keep} 行，删除约 ${activeCount - keep} 行`;
-    } else {
-      const keep = Math.floor(val);
-      hint.textContent = keep >= activeCount
-        ? `⚠️ 输入值（${keep}）≥ 有效行数（${activeCount}），将全部保留`
-        : `当前有效行数：${activeCount} 行（ID过滤后）→ 保留 ${keep} 行，删除 ${activeCount - keep} 行`;
-    }
+  function activeRowsOf(f) {
+    return f.workingRows.filter((_, i) => !isRowDeleted(f, i));
   }
 
-  function onDeleteInputChange() {
-    const mode = document.getElementById('deleteMode').value;
-    const val  = parseFloat(document.getElementById('deleteValue').value);
-    const hint = document.getElementById('deleteHint');
-    const active = getActiveRows();
-    const activeCount = active.length;
-    if (!activeCount || !val || val <= 0) { hint.textContent = activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : ''; return; }
-    if (mode === 'ratio') {
-      const del = Math.max(1, Math.round(activeCount * val / 100));
-      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 删除约 ${del} 行，剩余约 ${activeCount - del} 行`;
-    } else {
-      const del = Math.min(Math.floor(val), activeCount);
-      hint.textContent = `当前有效行数：${activeCount} 行（ID过滤后）→ 删除 ${del} 行，剩余 ${activeCount - del} 行`;
-    }
-  }
-
-  // ── Row operations ─────────────────────────────────────────────────────────
-  function getActiveRows() {
-    return workingRows.filter((_, i) => !deletedRowIndices.has(i));
-  }
-
-  function getActiveIndices() {
-    return workingRows.reduce((acc, _, i) => {
-      if (!deletedRowIndices.has(i)) acc.push(i);
+  function activeIndicesOf(f) {
+    return f.workingRows.reduce((acc, _, i) => {
+      if (!isRowDeleted(f, i)) acc.push(i);
       return acc;
     }, []);
   }
 
-  function applyKeep() {
-    const mode  = document.getElementById('keepMode').value;
-    const rawVal = parseFloat(document.getElementById('keepValue').value);
-    const active = getActiveRows();
-
-    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
-
-    let keepCount;
-    if (mode === 'ratio') {
-      if (rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
-      keepCount = Math.round(active.length * rawVal / 100);
-      keepCount = Math.max(1, keepCount);
-    } else {
-      keepCount = Math.floor(rawVal);
-    }
-
-    if (keepCount >= active.length) {
-      showToast(`⚠️ 保留数量（${keepCount}）≥ 当前有效行数（${active.length}），无需操作`, 'warning'); return;
-    }
-
-    const activeIndices = getActiveIndices();
-    const shuffled = shuffle([...activeIndices]);
-    const toDelete = shuffled.slice(keepCount);
-    toDelete.forEach(i => deletedRowIndices.add(i));
-
-    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${keepCount} 行`;
-    log(`保留行操作（${modeStr}）：从 ${active.length} 行中随机保留 ${keepCount} 行，删除了 ${toDelete.length} 行`, 'success');
-    showToast(`✅ 已随机保留 ${keepCount} 行，删除 ${toDelete.length} 行`, 'success');
-    rowOpChosen = 'keep';
-    rowOpExecuted = true;
-    updateRowOpMutex();
-    updateExportLock();
-    renderPreview();
-    updateStep(3);
-    updateExportDesc();
-    onKeepModeChange();
+  // 当前实际交付行数（合格行全保留 + 未被删除的不合格行）
+  function getDeliveredCount(f) {
+    if (!f.idCtx) return 0;
+    const keptBad = f.idCtx.unqualifiedIdx.filter(i => !isRowDeleted(f, i)).length;
+    return f.idCtx.qualifiedIdx.length + keptBad;
   }
 
-  function applyDelete() {
-    const mode   = document.getElementById('deleteMode').value;
-    const rawVal = parseFloat(document.getElementById('deleteValue').value);
-    const active = getActiveRows();
+  function fmtPct(x) { return (Math.round(x * 100) / 100).toFixed(2) + '%'; }
 
-    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
-
-    let toDeleteCount;
-    if (mode === 'ratio') {
-      if (rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
-      toDeleteCount = Math.round(active.length * rawVal / 100);
-      toDeleteCount = Math.max(1, toDeleteCount);
-    } else {
-      toDeleteCount = Math.floor(rawVal);
-    }
-
-    toDeleteCount = Math.min(toDeleteCount, active.length);
-
-    const activeIndices = getActiveIndices();
-    const shuffled = shuffle([...activeIndices]);
-    const toDelete = shuffled.slice(0, toDeleteCount);
-    toDelete.forEach(i => deletedRowIndices.add(i));
-
-    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${toDeleteCount} 行`;
-    log(`删除行操作（${modeStr}）：从 ${active.length} 行中随机删除 ${toDeleteCount} 行，剩余 ${active.length - toDeleteCount} 行`, 'success');
-    showToast(`✅ 已随机删除 ${toDeleteCount} 行，剩余 ${active.length - toDeleteCount} 行`, 'success');
-    rowOpChosen = 'delete';
-    rowOpExecuted = true;
-    updateRowOpMutex();
-    updateExportLock();
-    renderPreview();
-    updateStep(3);
-    updateExportDesc();
-    onDeleteModeChange();
-  }
-
-  // ── Column operations ──────────────────────────────────────────────────────
-  // 保留前 5 列（A-E），从 F 列（索引5）起删除
-  const KEEP_COLS = 5;
-
-  function showColumnConfirm() {
-    const box = document.getElementById('columnConfirm');
-    const listEl = document.getElementById('colDelList');
-    const confirmBtn = box.querySelector('.btn-danger');
-
-    if (headers.length <= KEEP_COLS) {
-      listEl.innerHTML = `<span style="color:var(--warning)">⚠️ 当前表格只有 ${headers.length} 列，已经在 A–E 之内，没有需要删除的列。</span>`;
-      confirmBtn.style.display = 'none';
-      box.classList.add('visible');
-      safeScroll(box);
-      return;
-    }
-
-    const del = headers.slice(KEEP_COLS);
-    listEl.innerHTML = `将删除 <b style="color:var(--danger)">${del.length}</b> 列（共 ${headers.length} 列 → 保留 5 列）：<br>`
-      + del.map((h, i) => `<span style="color:var(--danger)">${colLetter(KEEP_COLS + i)}</span>${h ? '（' + h + '）' : ''}`).join('、');
-
-    confirmBtn.style.display = '';
-    confirmBtn.textContent = `✓ 确认删除这 ${del.length} 列`;
-    box.classList.add('visible');
-    renderPreview(true);
-    safeScroll(box);
-  }
-
-  function safeScroll(el) {
-    try { if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* 忽略 */ }
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
   }
 
   function colLetter(i) {
@@ -1226,55 +1151,621 @@
     return s;
   }
 
+  function sanitizeSheetName(name) {
+    let s = String(name || 'Sheet1').replace(/[\[\]\*\/\\\?:]/g, '_').trim();
+    if (!s) s = 'Sheet1';
+    return s.slice(0, 31);
+  }
+
+  function safeScroll(el) {
+    try { if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* 忽略 */ }
+  }
+
+  // ── File upload (multi) ────────────────────────────────────────────────────
+  const uploadZone = $('uploadZone');
+  const fileInput  = $('fileInput');
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault(); uploadZone.classList.add('drag-over');
+  });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    if (e.dataTransfer.files && e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files && e.target.files.length) processFiles(e.target.files);
+    fileInput.value = ''; // 允许重复选择同一文件
+  });
+
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = e => reject(e);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function processFiles(fileList) {
+    const list = Array.from(fileList);
+    const valid = list.filter(f => f.name.match(/\.(xlsx|xls)$/i));
+    const skipped = list.length - valid.length;
+
+    if (!valid.length) {
+      showToast('❌ 仅支持 .xlsx / .xls 格式', 'error');
+      return;
+    }
+
+    let okCount = 0, failCount = 0;
+    for (const file of valid) {
+      try {
+        const buf = await readFileAsArrayBuffer(file);
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        if (!raw || raw.length < 2) {
+          failCount++;
+          log(`文件载入失败：${file.name} — 表格数据为空或仅有表头`, 'warning');
+          continue;
+        }
+
+        const headers = raw[0].map(h => String(h));
+        const workingRows = raw.slice(1).map(r => {
+          while (r.length < headers.length) r.push('');
+          return [...r];
+        });
+
+        files.push({
+          id: ++fileSeq,
+          name: file.name,
+          size: file.size,
+          sheetName,
+          headers,
+          workingRows,
+          idDeleted: new Set(),
+          rowDeleted: new Set(),
+          deletedCols: false,
+          idCtx: null,
+          rowOpChosen: 'none',
+          rowOpExecuted: false
+        });
+        okCount++;
+        log(`文件载入成功：${file.name}，共 ${workingRows.length} 行，${headers.length} 列`, 'success');
+      } catch (err) {
+        failCount++;
+        log(`文件解析失败：${file.name} — ${err.message}`, 'danger');
+      }
+    }
+
+    if (okCount > 0) {
+      // 新加入的文件设为当前文件
+      currentFileId = files[files.length - 1].id;
+      onFilesLoaded();
+      showToast(`✅ 成功读取 ${okCount} 个文件${failCount ? `，${failCount} 个失败` : ''}`, failCount ? 'warning' : 'success');
+      if (skipped > 0) showToast(`⚠️ 已跳过 ${skipped} 个非 Excel 文件`, 'warning');
+      if (files.length > 1 && scopeMode === 'current') {
+        log(`已加载 ${files.length} 个文件，如需批量处理请点击上方「📚 全部文件（批量）」切换操作范围`, 'warning');
+      }
+    } else {
+      showToast(`❌ ${failCount} 个文件解析失败，请检查格式`, 'error');
+    }
+  }
+
+  function onFilesLoaded() {
+    $('fileSummary').style.display = 'flex';
+    $('scopeBar').style.display = 'flex';
+    $('opsSection').style.display = 'grid';
+    $('logSection').style.display = 'block';
+    $('exportSection').style.display = 'flex';
+    renderFileList();
+    updateScopeUI();
+    updateRowOpMutex();
+    updateExportLock();
+    updateStep(2);
+    renderPreview();
+    onKeepModeChange();
+    onDeleteModeChange();
+  }
+
+  function removeFile(id) {
+    const idx = files.findIndex(f => f.id === id);
+    if (idx === -1) return;
+    const name = files[idx].name;
+    files.splice(idx, 1);
+    log(`移除文件：${name}（剩余 ${files.length} 个文件）`, 'warning');
+
+    if (currentFileId === id) {
+      currentFileId = files.length ? files[Math.min(idx, files.length - 1)].id : null;
+    }
+    if (!files.length) {
+      resetAll(true);
+      return;
+    }
+    renderFileList();
+    updateScopeUI();
+    updateRowOpMutex();
+    updateExportLock();
+    renderPreview();
+    renderSettle();
+    updateExportDesc();
+    onKeepModeChange();
+    onDeleteModeChange();
+    showToast(`已移除 ${name}`, 'warning');
+  }
+
+  function clearAllFiles() {
+    files = [];
+    currentFileId = null;
+    $('fileSummary').style.display = 'none';
+    $('fileList').innerHTML = '';
+    $('scopeBar').style.display = 'none';
+    $('opsSection').style.display = 'none';
+    $('logSection').style.display = 'none';
+    $('previewSection').style.display = 'none';
+    $('exportSection').style.display = 'none';
+    $('settlePanel').classList.remove('visible');
+    $('idFilterHint').textContent = '';
+  }
+
+  // ── File list render ───────────────────────────────────────────────────────
+  function renderFileList() {
+    const listEl = $('fileList');
+    if (!files.length) { listEl.innerHTML = ''; return; }
+
+    listEl.innerHTML = files.map(f => {
+      const active = f.id === currentFileId;
+      const chips = [];
+
+      if (f.idCtx) {
+        const A = f.idCtx.qualifiedIdx.length;
+        const N = f.idCtx.total;
+        const ratio = N ? A / N * 100 : 0;
+        chips.push(`<span class="fr-chip ok">合格 ${A}/${N}</span>`);
+        chips.push(`<span class="fr-chip ${ratio >= 80 ? 'ok' : 'warn'}">结算 ${fmtPct(ratio)}</span>`);
+        const T = getDeliveredCount(f);
+        chips.push(`<span class="fr-chip">交付 ${T} 行</span>`);
+        // 批量模式下各文件共用一份ID列表，逐个文件的"未命中数"没有参考意义，仅单文件模式显示
+        if (f.idCtx.notFound > 0 && scopeMode === 'current' && files.length === 1) {
+          chips.push(`<span class="fr-chip warn">${f.idCtx.notFound} 个ID未命中</span>`);
+        }
+      } else {
+        chips.push(`<span class="fr-chip idle">未过滤</span>`);
+      }
+      if (f.deletedCols) chips.push(`<span class="fr-chip idle">已裁列</span>`);
+      if (f.rowOpExecuted) chips.push(`<span class="fr-chip ok">✓ 已处理</span>`);
+
+      return `
+        <div class="file-row ${active ? 'active' : ''}" onclick="selectFile(${f.id})">
+          <span class="file-icon">📗</span>
+          <div class="file-details">
+            <div class="file-name">
+              <span>${escapeHtml(f.name)}</span>
+              ${active ? '<span class="cur-tag">当前</span>' : ''}
+            </div>
+            <div class="file-meta">${fmtSize(f.size)} · Sheet: ${escapeHtml(f.sheetName)} · ${f.workingRows.length} 行 × ${f.headers.length} 列</div>
+          </div>
+          <div class="file-stats">${chips.join('')}</div>
+          <button class="remove-btn" onclick="event.stopPropagation(); removeFile(${f.id})" title="移除文件">✕</button>
+        </div>`;
+    }).join('');
+
+    // 汇总条
+    const totalRows = files.reduce((s, f) => s + f.workingRows.length, 0);
+    const doneFiles = files.filter(f => f.rowOpExecuted).length;
+    const filtered = files.filter(f => f.idCtx);
+    const sumA = filtered.reduce((s, f) => s + f.idCtx.qualifiedIdx.length, 0);
+    const sumN = filtered.reduce((s, f) => s + f.idCtx.total, 0);
+
+    let summary = `<span>📚 <b>${files.length}</b> 个文件</span><span class="fs-sep"></span>`
+      + `<span>总行数 <b>${totalRows}</b></span><span class="fs-sep"></span>`
+      + `<span>已处理 <b>${doneFiles}</b>/${files.length}</span>`;
+    if (sumN > 0) {
+      summary += `<span class="fs-sep"></span><span>整体结算比例 <b style="color:#34d399">${fmtPct(sumA / sumN * 100)}</b></span>`;
+    }
+    $('fileSummary').innerHTML = summary;
+  }
+
+  function selectFile(id) {
+    currentFileId = id;
+    renderFileList();
+    updateScopeUI();
+    updateRowOpMutex();
+    updateExportLock();
+    renderPreview();
+    renderSettle();
+    updateExportDesc();
+    onKeepModeChange();
+    onDeleteModeChange();
+  }
+
+  // ── Scope ──────────────────────────────────────────────────────────────────
+  function setScope(mode) {
+    if (mode === 'all' && files.length < 2) {
+      showToast('⚠️ 只有 1 个文件，无需批量模式', 'warning');
+      return;
+    }
+    scopeMode = mode;
+    updateScopeUI();
+    renderPreview();
+    renderSettle();
+    updateExportDesc();
+    onKeepModeChange();
+    onDeleteModeChange();
+    log(`操作范围切换为：${scopeLabel()}`, 'warning');
+  }
+
+  function updateScopeUI() {
+    $('scopeCurrentBtn').className = 'scope-btn' + (scopeMode === 'current' ? ' active' : '');
+    $('scopeAllBtn').className = 'scope-btn' + (scopeMode === 'all' ? ' active' : '');
+    $('scopeAllBtn').disabled = files.length < 2;
+    $('scopeAllBtn').style.opacity = files.length < 2 ? '0.45' : '';
+    const hint = $('scopeHint');
+    if (scopeMode === 'all') {
+      hint.innerHTML = `📚 批量模式：所有操作将作用于 <b>全部 ${files.length} 个文件</b>，每个文件独立计算`;
+    } else {
+      const c = currentFile();
+      hint.innerHTML = files.length > 1
+        ? `🎯 仅操作 <b>${c ? escapeHtml(c.name) : '-'}</b>，点击左侧文件行可切换`
+        : `🎯 仅操作 <b>${c ? escapeHtml(c.name) : '-'}</b>`;
+    }
+  }
+
+  // ── Mode change hints ──────────────────────────────────────────────────────
+  function scopeActiveCounts() {
+    const targets = scopeFiles();
+    const counts = targets.map(f => ({ f, n: activeRowsOf(f).length }));
+    const total = counts.reduce((s, c) => s + c.n, 0);
+    return { counts, total, multi: targets.length > 1 };
+  }
+
+  function scopeHintText(base) {
+    const { counts, total, multi } = scopeActiveCounts();
+    if (!multi) return base + `（当前有效行数：${counts[0]?.n ?? 0} 行，ID过滤后）`;
+    const detail = counts.map(c => `${escapeHtml(c.f.name)} ${c.n}`).join('、');
+    return `${base}（批量：各文件分别计算 · ${detail} · 合计 ${total} 行）`;
+  }
+
+  function onKeepModeChange() {
+    const mode = $('keepMode').value;
+    const label = $('keepInputLabel');
+    const input = $('keepValue');
+    const hint  = $('keepHint');
+    const { counts, multi } = scopeActiveCounts();
+    const activeCount = multi ? counts.reduce((s, c) => s + c.n, 0) : (counts[0]?.n ?? 0);
+
+    if (mode === 'ratio') {
+      label.textContent = '保留比例 (%)';
+      input.placeholder = '例如：30  表示保留30%';
+      input.min = '1'; input.max = '100';
+      hint.textContent = multi
+        ? `批量模式：每个文件各保留相同的比例（按各自基数计算）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入30则保留约 ${Math.round(activeCount*0.3)} 行` : '');
+    } else {
+      label.textContent = '保留行数';
+      input.placeholder = `例如：100（当前有效行数：${activeCount || '-'}）`;
+      input.removeAttribute('max');
+      hint.textContent = multi
+        ? `批量模式：每个文件各保留相同的行数（按各自基数计算）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '');
+    }
+    input.value = '';
+  }
+
+  function onDeleteModeChange() {
+    const mode = $('deleteMode').value;
+    const label = $('deleteInputLabel');
+    const input = $('deleteValue');
+    const hint  = $('deleteHint');
+    const { counts, multi } = scopeActiveCounts();
+    const activeCount = multi ? counts.reduce((s, c) => s + c.n, 0) : (counts[0]?.n ?? 0);
+
+    if (mode === 'ratio') {
+      label.textContent = '删除比例 (%)';
+      input.placeholder = '例如：20  表示删除20%';
+      input.min = '1'; input.max = '100';
+      hint.textContent = multi
+        ? `批量模式：每个文件各删除相同的比例（按各自基数计算）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后），输入20则删除约 ${Math.round(activeCount*0.2)} 行` : '');
+    } else {
+      label.textContent = '删除行数';
+      input.placeholder = `例如：50（当前有效行数：${activeCount || '-'}）`;
+      input.removeAttribute('max');
+      hint.textContent = multi
+        ? `批量模式：每个文件各删除相同的行数（按各自基数计算）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '');
+    }
+    input.value = '';
+  }
+
+  // 实时输入时更新提示（基于有效行数）
+  function onKeepInputChange() {
+    const mode = $('keepMode').value;
+    const val  = parseFloat($('keepValue').value);
+    const hint = $('keepHint');
+    const { counts, multi } = scopeActiveCounts();
+    const activeCount = multi ? counts.reduce((s, c) => s + c.n, 0) : (counts[0]?.n ?? 0);
+
+    if (!activeCount || !val || val <= 0) {
+      hint.textContent = multi
+        ? `批量模式：每个文件各保留相同的数值（各文件基数独立）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '');
+      return;
+    }
+    if (mode === 'ratio') {
+      const keep = Math.max(1, Math.round(activeCount * val / 100));
+      hint.textContent = multi
+        ? `批量：每个文件保留约 ${val}%（按各自基数）· 合计约保留 ${keep} / ${activeCount} 行`
+        : `当前有效行数：${activeCount} 行（ID过滤后）→ 保留约 ${keep} 行，删除约 ${activeCount - keep} 行`;
+    } else {
+      const keep = Math.floor(val);
+      if (multi) {
+        const over = counts.filter(c => c.n < keep).length;
+        const totalKept = counts.reduce((s, c) => s + Math.min(keep, c.n), 0);
+        hint.textContent = `批量：每个文件保留 ${keep} 行 · 合计保留 ${totalKept} 行`
+          + (over ? ` · ⚠️ 有 ${over} 个文件有效行不足 ${keep}，将全部保留` : '');
+      } else {
+        hint.textContent = keep >= activeCount
+          ? `⚠️ 输入值（${keep}）≥ 有效行数（${activeCount}），将全部保留`
+          : `当前有效行数：${activeCount} 行（ID过滤后）→ 保留 ${keep} 行，删除 ${activeCount - keep} 行`;
+      }
+    }
+  }
+
+  function onDeleteInputChange() {
+    const mode = $('deleteMode').value;
+    const val  = parseFloat($('deleteValue').value);
+    const hint = $('deleteHint');
+    const { counts, multi } = scopeActiveCounts();
+    const activeCount = multi ? counts.reduce((s, c) => s + c.n, 0) : (counts[0]?.n ?? 0);
+
+    if (!activeCount || !val || val <= 0) {
+      hint.textContent = multi
+        ? `批量模式：每个文件各删除相同的数值（各文件基数独立）。合计有效行数：${activeCount} 行`
+        : (activeCount ? `当前有效行数：${activeCount} 行（ID过滤后）` : '');
+      return;
+    }
+    if (mode === 'ratio') {
+      const del = Math.max(1, Math.round(activeCount * val / 100));
+      hint.textContent = multi
+        ? `批量：每个文件删除约 ${val}%（按各自基数）· 合计约删除 ${del} / ${activeCount} 行`
+        : `当前有效行数：${activeCount} 行（ID过滤后）→ 删除约 ${del} 行，剩余约 ${activeCount - del} 行`;
+    } else {
+      const del = Math.min(Math.floor(val), activeCount);
+      hint.textContent = multi
+        ? `批量：每个文件删除 ${del} 行 · 合计剩余 ${counts.reduce((s,c)=>s+Math.max(0, c.n - del), 0)} 行`
+        : `当前有效行数：${activeCount} 行（ID过滤后）→ 删除 ${del} 行，剩余 ${activeCount - del} 行`;
+    }
+  }
+
+  // ── Row operations ─────────────────────────────────────────────────────────
+  function applyKeep() {
+    const mode  = $('keepMode').value;
+    const rawVal = parseFloat($('keepValue').value);
+    const targets = scopeFiles();
+
+    if (!targets.length) { showToast('⚠️ 请先上传文件', 'warning'); return; }
+    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
+    if (mode === 'ratio' && rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
+
+    let totalKept = 0, totalDeleted = 0, skippedFiles = 0;
+    const details = [];
+
+    targets.forEach(f => {
+      const active = activeRowsOf(f);
+      if (!active.length) { skippedFiles++; return; }
+
+      // 该文件此前若已执行过另一种行操作，则新操作替换旧操作（保持 keep/delete 互斥）
+      if (f.rowOpChosen !== 'none' && f.rowOpChosen !== 'keep') {
+        f.rowDeleted = new Set();
+        f.rowOpChosen = 'none';
+      }
+
+      let keepCount;
+      if (mode === 'ratio') {
+        keepCount = Math.max(1, Math.round(active.length * rawVal / 100));
+      } else {
+        keepCount = Math.floor(rawVal);
+      }
+      if (keepCount >= active.length) {
+        // 有效行数不足保留数 → 该文件全部保留，不做任何删除
+        skippedFiles++;
+        details.push(`${f.name}：有效行 ${active.length} ≤ ${keepCount}，全部保留`);
+        f.rowOpChosen = 'keep';
+        f.rowOpExecuted = true;
+        return;
+      }
+
+      const activeIndices = activeIndicesOf(f);
+      const shuffled = shuffle([...activeIndices]);
+      const toDelete = shuffled.slice(keepCount);
+      toDelete.forEach(i => f.rowDeleted.add(i));
+
+      totalKept += keepCount;
+      totalDeleted += toDelete.length;
+      details.push(`${f.name}：保留 ${keepCount}/${active.length} 行`);
+      f.rowOpChosen = 'keep';
+      f.rowOpExecuted = true;
+    });
+
+    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${Math.floor(rawVal)} 行`;
+    log(`保留行操作（${modeStr}）[${scopeLabel()}]：${details.join('；')}${skippedFiles ? `（${skippedFiles} 个文件无需处理）` : ''}`, 'success');
+    showToast(`✅ 已随机保留 ${totalKept} 行，删除 ${totalDeleted} 行${targets.length > 1 ? `（${targets.length} 个文件）` : ''}`, 'success');
+
+    afterRowOp();
+  }
+
+  function applyDelete() {
+    const mode   = $('deleteMode').value;
+    const rawVal = parseFloat($('deleteValue').value);
+    const targets = scopeFiles();
+
+    if (!targets.length) { showToast('⚠️ 请先上传文件', 'warning'); return; }
+    if (!rawVal || rawVal <= 0) { showToast('⚠️ 请输入有效数值', 'warning'); return; }
+    if (mode === 'ratio' && rawVal > 100) { showToast('⚠️ 比例不能超过 100%', 'warning'); return; }
+
+    let totalDeleted = 0, totalRemain = 0, emptyFiles = 0;
+    const details = [];
+
+    targets.forEach(f => {
+      const active = activeRowsOf(f);
+      if (!active.length) { emptyFiles++; return; }
+
+      // 该文件此前若已执行过另一种行操作，则新操作替换旧操作（保持 keep/delete 互斥）
+      if (f.rowOpChosen !== 'none' && f.rowOpChosen !== 'delete') {
+        f.rowDeleted = new Set();
+        f.rowOpChosen = 'none';
+      }
+
+      let toDeleteCount;
+      if (mode === 'ratio') {
+        toDeleteCount = Math.max(1, Math.round(active.length * rawVal / 100));
+      } else {
+        toDeleteCount = Math.floor(rawVal);
+      }
+      toDeleteCount = Math.min(toDeleteCount, active.length);
+
+      const activeIndices = activeIndicesOf(f);
+      const shuffled = shuffle([...activeIndices]);
+      const toDelete = shuffled.slice(0, toDeleteCount);
+      toDelete.forEach(i => f.rowDeleted.add(i));
+
+      totalDeleted += toDelete.length;
+      totalRemain += active.length - toDelete.length;
+      details.push(`${f.name}：删除 ${toDeleteCount}/${active.length} 行`);
+      f.rowOpChosen = 'delete';
+      f.rowOpExecuted = true;
+    });
+
+    const modeStr = mode === 'ratio' ? `${rawVal}%` : `${Math.floor(rawVal)} 行`;
+    log(`删除行操作（${modeStr}）[${scopeLabel()}]：${details.join('；')}`, 'success');
+    showToast(`✅ 已随机删除 ${totalDeleted} 行，剩余 ${totalRemain} 行${targets.length > 1 ? `（${targets.length} 个文件）` : ''}`, 'success');
+
+    afterRowOp();
+  }
+
+  function afterRowOp() {
+    updateRowOpMutex();
+    updateExportLock();
+    renderFileList();
+    renderPreview();
+    renderSettle();
+    updateStep(3);
+    updateExportDesc();
+    onKeepModeChange();
+    onDeleteModeChange();
+  }
+
+  // ── Column operations ──────────────────────────────────────────────────────
+  function showColumnConfirm() {
+    const box = $('columnConfirm');
+    const listEl = $('colDelList');
+    const confirmBtn = box.querySelector('.btn-danger');
+    const targets = scopeFiles();
+
+    if (!targets.length) { showToast('⚠️ 请先上传文件', 'warning'); return; }
+
+    const needDel = targets.filter(f => f.headers.length > KEEP_COLS);
+    const noNeed  = targets.filter(f => f.headers.length <= KEEP_COLS);
+
+    if (!needDel.length) {
+      listEl.innerHTML = `<span style="color:var(--warning)">⚠️ 作用域内的文件都不超过 ${KEEP_COLS} 列，已经在 A–E 之内，没有需要删除的列。</span>`;
+      confirmBtn.style.display = 'none';
+      box.classList.add('visible');
+      safeScroll(box);
+      return;
+    }
+
+    // 每个文件的待删列可能不同，逐个列出
+    const blocks = needDel.map(f => {
+      const del = f.headers.slice(KEEP_COLS);
+      const names = del.map((h, i) => `<span style="color:var(--danger)">${colLetter(KEEP_COLS + i)}</span>${h ? '（' + escapeHtml(h) + '）' : ''}`).join('、');
+      return `<div style="margin-bottom:8px;">📗 <b>${escapeHtml(f.name)}</b> · 共 ${f.headers.length} 列 → 删除 <b style="color:var(--danger)">${del.length}</b> 列<br><span style="padding-left:14px;display:inline-block;">${names}</span></div>`;
+    });
+    if (noNeed.length) {
+      blocks.push(`<div style="color:var(--warning);">⚠️ ${noNeed.length} 个文件列数不足 ${KEEP_COLS} 列，将保持不变：${noNeed.map(f => escapeHtml(f.name)).join('、')}</div>`);
+    }
+
+    listEl.innerHTML = blocks.join('');
+    confirmBtn.style.display = '';
+    confirmBtn.textContent = `✓ 确认删除这 ${needDel.length} 个文件的 F 列及以后`;
+    box.classList.add('visible');
+    renderPreview(true);
+    safeScroll(box);
+  }
+
   function hideColumnConfirm() {
-    document.getElementById('columnConfirm').classList.remove('visible');
+    $('columnConfirm').classList.remove('visible');
     renderPreview();
   }
 
   function applyColumnDelete() {
-    const before = headers.length;
-    headers = headers.slice(0, KEEP_COLS);
-    workingRows = workingRows.map(r => r.slice(0, KEEP_COLS));
-    deletedCols = true;
-    document.getElementById('columnConfirm').classList.remove('visible');
+    const targets = scopeFiles();
+    let totalRemoved = 0, touched = 0;
+    const details = [];
 
-    const removed = before - KEEP_COLS;
-    log(`列删除操作：删除了第 ${KEEP_COLS+1} 列（F列）起的 ${removed} 列，保留前 ${KEEP_COLS} 列（A-E）`, 'danger');
-    showToast(`✅ 已删除 ${removed} 列（F列及以后），保留 A-E 列`, 'success');
+    targets.forEach(f => {
+      if (f.headers.length <= KEEP_COLS) return;
+      const before = f.headers.length;
+      f.headers = f.headers.slice(0, KEEP_COLS);
+      f.workingRows = f.workingRows.map(r => r.slice(0, KEEP_COLS));
+      f.deletedCols = true;
+      totalRemoved += before - KEEP_COLS;
+      touched++;
+      details.push(`${f.name}：删除 ${before - KEEP_COLS} 列，保留 ${KEEP_COLS} 列`);
+    });
+
+    $('columnConfirm').classList.remove('visible');
+
+    if (!touched) {
+      showToast('⚠️ 没有需要删除列的文件', 'warning');
+      return;
+    }
+
+    log(`列删除操作 [${scopeLabel()}]：${details.join('；')}`, 'danger');
+    showToast(`✅ 已处理 ${touched} 个文件，共删除 ${totalRemoved} 列（保留 A-E 列）`, 'success');
     // 注意：不设置 rowOpExecuted，列删除不触发下载解锁
+    renderFileList();
     renderPreview();
+    renderSettle();
     updateStep(3);
     updateExportDesc();
   }
 
   // ── Preview ────────────────────────────────────────────────────────────────
   function renderPreview(highlightCols = false) {
-    const section = document.getElementById('previewSection');
+    const section = $('previewSection');
+    const f = currentFile();
+    if (!f) { section.style.display = 'none'; return; }
+
     section.style.display = 'block';
     section.classList.add('visible');
 
-    const activeRows = getActiveRows();
-    document.getElementById('statTotal').textContent = workingRows.length;
-    document.getElementById('statCurrent').textContent = activeRows.length;
-    const willDelCols = highlightCols && headers.length > KEEP_COLS;
-    document.getElementById('statCols').textContent = headers.length + (willDelCols ? `（将删除${headers.length - KEEP_COLS}列）` : '');
+    const activeRows = activeRowsOf(f);
+    $('statTotal').textContent = f.workingRows.length;
+    $('statCurrent').textContent = activeRows.length;
+    const willDelCols = highlightCols && f.headers.length > KEEP_COLS;
+    $('statCols').textContent = f.headers.length + (willDelCols ? `（将删除${f.headers.length - KEEP_COLS}列）` : '');
+    $('previewTitle').innerHTML = `📊 数据预览 <span style="font-size:12px;font-weight:500;color:var(--text-muted);">${escapeHtml(f.name)}</span>`;
 
-    // Header
-    const thead = document.getElementById('tableHead');
-    thead.innerHTML = '<tr>' + headers.map((h, i) => {
+    const thead = $('tableHead');
+    thead.innerHTML = '<tr>' + f.headers.map((h, i) => {
       const cls = highlightCols && i >= KEEP_COLS ? 'class="col-deleted"' : '';
-      return `<th ${cls}>${h || '(空)'}</th>`;
+      return `<th ${cls}>${escapeHtml(h || '(空)')}</th>`;
     }).join('') + '</tr>';
 
-    // Body (最多200行)
-    const tbody = document.getElementById('tableBody');
-    const displayRows = workingRows.slice(0, 200);
-    const unqSet = idCtx ? new Set(idCtx.unqualifiedIdx) : null;
+    const tbody = $('tableBody');
+    const displayRows = f.workingRows.slice(0, 200);
+    const unqSet = f.idCtx ? new Set(f.idCtx.unqualifiedIdx) : null;
     tbody.innerHTML = displayRows.map((row, i) => {
-      const isDeleted = deletedRowIndices.has(i);
+      const isDeleted = isRowDeleted(f, i);
       const isUnq = unqSet && unqSet.has(i);
       const trCls = isDeleted ? 'class="row-deleted"' : (isUnq ? 'class="row-unqualified"' : '');
-      const cells = row.slice(0, headers.length)
+      const cells = row.slice(0, f.headers.length)
         .map((cell, ci) => {
           const tdCls = highlightCols && ci >= KEEP_COLS ? 'style="color:var(--danger);opacity:.5;text-decoration:line-through;"' : '';
           return `<td ${tdCls}>${escapeHtml(String(cell))}</td>`;
@@ -1285,22 +1776,35 @@
 
   // ── Export desc ───────────────────────────────────────────────────────────
   function updateExportDesc() {
-    const active = getActiveRows();
-    document.getElementById('exportDesc').textContent =
-      `将导出 ${active.length} 行 × ${headers.length} 列数据`;
+    const targets = scopeFiles();
+    if (!targets.length) {
+      $('exportDesc').textContent = '完成至少一项行操作后，即可下载处理后的文件';
+      return;
+    }
+    const totalRows = targets.reduce((s, f) => s + activeRowsOf(f).length, 0);
+    const totalCols = targets.reduce((s, f) => s + f.headers.length, 0);
+    $('exportDesc').textContent = targets.length === 1
+      ? `将导出 ${totalRows} 行 × ${totalCols} 列数据`
+      : `当前作用域 ${targets.length} 个文件，共 ${totalRows} 行数据`;
   }
 
   // ── Row op mutex ──────────────────────────────────────────────────────────
-  // 一旦执行了保留或删除，另一方卡片禁用
   function updateRowOpMutex() {
-    const keepCard   = document.getElementById('keepCard');
-    const deleteCard = document.getElementById('deleteCard');
-    if (rowOpChosen === 'keep') {
+    const targets = scopeFiles();
+    const keepCard   = $('keepCard');
+    const deleteCard = $('deleteCard');
+    if (!targets.length) {
       keepCard.classList.remove('disabled');
-      deleteCard.classList.add('disabled');
-    } else if (rowOpChosen === 'delete') {
       deleteCard.classList.remove('disabled');
-      keepCard.classList.add('disabled');
+      return;
+    }
+    const chosen = new Set(targets.map(f => f.rowOpChosen));
+    // 仅当作用域内「所有」文件都已选定同一种操作时，才锁定另一方
+    const allSame = chosen.size === 1 && !chosen.has('none');
+    if (allSame) {
+      const op = [...chosen][0];
+      if (op === 'keep') { keepCard.classList.remove('disabled'); deleteCard.classList.add('disabled'); }
+      else { deleteCard.classList.remove('disabled'); keepCard.classList.add('disabled'); }
     } else {
       keepCard.classList.remove('disabled');
       deleteCard.classList.remove('disabled');
@@ -1309,48 +1813,138 @@
 
   // ── Export lock ───────────────────────────────────────────────────────────
   function updateExportLock() {
-    const btn  = document.getElementById('exportBtn');
-    const tip  = document.getElementById('exportLockedTip');
-    const title = document.getElementById('exportTitle');
-    if (rowOpExecuted) {
+    const btn  = $('exportBtn');
+    const one  = $('exportOneBtn');
+    const tip  = $('exportLockedTip');
+    const title = $('exportTitle');
+    const ready = files.filter(f => f.rowOpExecuted);
+    const cur = currentFile();
+    const curReady = cur && cur.rowOpExecuted;
+
+    // 单文件导出按钮
+    one.classList.toggle('locked', !curReady);
+    one.disabled = !curReady;
+    one.textContent = curReady ? '⬇️ 导出当前文件' : '🔒 导出当前文件';
+
+    // 批量导出按钮
+    if (ready.length > 0) {
       btn.classList.remove('locked');
-      btn.textContent = '⬇️ 下载处理后的文件';
+      btn.disabled = false;
+      btn.textContent = files.length > 1 ? `📦 批量导出（${ready.length} 个文件 · ZIP）` : '⬇️ 下载处理后的文件';
       tip.style.display = 'none';
-      title.textContent = '✅ 处理完成，可以导出了';
+      title.textContent = files.length > 1 ? `✅ 已完成 ${ready.length}/${files.length} 个文件，可导出` : '✅ 处理完成，可以导出了';
     } else {
       btn.classList.add('locked');
-      btn.textContent = '🔒 下载处理后的文件';
+      btn.disabled = true;
+      btn.textContent = files.length > 1 ? '🔒 批量导出（ZIP）' : '🔒 下载处理后的文件';
       tip.style.display = 'flex';
       title.textContent = '⏳ 请先执行操作';
     }
   }
 
-  function exportFile() {
-    if (!rowOpExecuted) {
-      showToast('⚠️ 请先执行至少一项行操作后再下载', 'warning');
-      return;
-    }
-    const activeRows = getActiveRows();
-    const exportData = [headers, ...activeRows];
-    const ws = XLSX.utils.aoa_to_sheet(exportData);
+  // 构造导出工作簿数据
+  function buildExportData(f) {
+    return [f.headers, ...activeRowsOf(f)];
+  }
+
+  function outName(f) {
+    return f.name.replace(/\.(xlsx|xls)$/i, '') + '_processed.xlsx';
+  }
+
+  function exportCurrent() {
+    const f = currentFile();
+    if (!f) { showToast('⚠️ 请先上传文件', 'warning'); return; }
+    if (!f.rowOpExecuted) { showToast('⚠️ 请先执行至少一项行操作后再下载', 'warning'); return; }
+    downloadOne(f);
+  }
+
+  // 下载单个文件
+  function downloadOne(f) {
+    const ws = XLSX.utils.aoa_to_sheet(buildExportData(f));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
+    XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(f.sheetName));
+    XLSX.writeFile(wb, outName(f));
 
-    const outName = fileName.replace(/\.(xlsx|xls)$/i, '') + '_processed.xlsx';
-    XLSX.writeFile(wb, outName);
-
-    log(`导出成功：${outName}，共 ${activeRows.length} 行 ${headers.length} 列`, 'success');
-    showToast(`⬇️ 文件已下载：${outName}`, 'success');
+    const n = activeRowsOf(f).length;
+    log(`导出成功：${outName(f)}，共 ${n} 行 ${f.headers.length} 列`, 'success');
+    showToast(`⬇️ 文件已下载：${outName(f)}`, 'success');
     updateStep(4);
   }
 
-  // ── ID Filter ──────────────────────────────────────────────────────────────
-  let idFilterMode = 'keep'; // 'keep' | 'delete'
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
+  function exportAll() {
+    const ready = files.filter(f => f.rowOpExecuted);
+    if (!ready.length) {
+      showToast('⚠️ 请先执行至少一项行操作后再下载', 'warning');
+      return;
+    }
+
+    // 单文件直接下载（注意：导出那个「就绪」的文件，不一定是当前选中的文件）
+    if (ready.length === 1) {
+      downloadOne(ready[0]);
+      return;
+    }
+
+    // 多文件打包 ZIP
+    if (typeof JSZip === 'undefined') {
+      showToast('⚠️ 压缩组件未加载，改为逐个下载（浏览器可能询问允许多文件下载）', 'warning');
+      ready.forEach((f, i) => setTimeout(() => {
+        const ws = XLSX.utils.aoa_to_sheet(buildExportData(f));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(f.sheetName));
+        XLSX.writeFile(wb, outName(f));
+      }, i * 600));
+      log(`批量导出（降级逐个下载）：${ready.length} 个文件`, 'warning');
+      updateStep(4);
+      return;
+    }
+
+    const zip = new JSZip();
+    const usedNames = new Set();
+    ready.forEach(f => {
+      let name = outName(f);
+      // 同名兜底：避免 ZIP 内文件互相覆盖
+      if (usedNames.has(name)) {
+        const base = name.replace(/\.xlsx$/i, '');
+        let i = 2;
+        while (usedNames.has(`${base}(${i}).xlsx`)) i++;
+        name = `${base}(${i}).xlsx`;
+      }
+      usedNames.add(name);
+      const ws = XLSX.utils.aoa_to_sheet(buildExportData(f));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(f.sheetName));
+      zip.file(name, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+    });
+
+    zip.generateAsync({ type: 'blob' }).then(blob => {
+      const zipName = `批量处理结果_${ready.length}个文件.xlsx.zip`;
+      saveBlob(blob, zipName);
+      const totalRows = ready.reduce((s, f) => s + activeRowsOf(f).length, 0);
+      log(`批量导出成功：${zipName}，包含 ${ready.length} 个文件，共 ${totalRows} 行`, 'success');
+      showToast(`📦 已打包下载 ${ready.length} 个文件（${zipName}）`, 'success');
+      updateStep(4);
+    }).catch(err => {
+      log(`批量导出失败：${err.message}`, 'danger');
+      showToast('❌ 打包失败：' + err.message, 'error');
+    });
+  }
+
+  // ── ID Filter ──────────────────────────────────────────────────────────────
   function setIdMode(mode) {
     idFilterMode = mode;
-    const keepBtn   = document.getElementById('idModeKeepBtn');
-    const deleteBtn = document.getElementById('idModeDeleteBtn');
+    const keepBtn   = $('idModeKeepBtn');
+    const deleteBtn = $('idModeDeleteBtn');
     if (mode === 'keep') {
       keepBtn.className   = 'id-mode-btn active-keep';
       deleteBtn.className = 'id-mode-btn';
@@ -1358,162 +1952,219 @@
       keepBtn.className   = 'id-mode-btn';
       deleteBtn.className = 'id-mode-btn active-delete';
     }
-    // 更新输入框 placeholder
-    const ta = document.getElementById('idInput');
+    const ta = $('idInput');
     ta.placeholder = mode === 'keep'
       ? '粘贴合格 ID（每行一个），不符合的ID会被标记为不合格行\n例如：\nDATA100_001\nDATA100_002'
       : '粘贴不合格 ID（每行一个），匹配到的行会被标记为不合格行\n例如：\nDATA100_099\nDATA100_100';
-    document.getElementById('idFilterHint').textContent = '';
+    $('idFilterHint').textContent = '';
     // 模式变了，旧的过滤结果作废
     invalidateIdCtx();
   }
 
-  // 判定条件变化（模式/匹配列）后，清空结算比例上下文
+  // 判定条件变化（模式/匹配列）后，清空所有文件的结算比例上下文
+  // 注意：同时撤销 ID 过滤造成的行删除（只撤销 ID 过滤层，保留行操作层的删除）
   function invalidateIdCtx() {
-    if (!idCtx) return;
-    idCtx = null;
-    const panel = document.getElementById('settlePanel');
-    if (panel) panel.classList.remove('visible');
-    const hint = document.getElementById('settleHint');
-    if (hint) { hint.textContent = ''; hint.className = 'settle-hint'; }
-    const tr = document.getElementById('targetRatioInput');
-    if (tr) tr.value = '';
+    const had = files.some(f => f.idCtx);
+    files.forEach(f => {
+      f.idCtx = null;
+      f.idDeleted.clear();
+    });
+    if (had) {
+      const panel = $('settlePanel');
+      if (panel) panel.classList.remove('visible');
+      const hint = $('settleHint');
+      if (hint) { hint.textContent = ''; hint.className = 'settle-hint'; }
+      $('targetRatioInput').value = '';
+      renderFileList();
+      renderPreview();
+    }
   }
 
   function updateIdCounter() {
     const ids = parseIdList();
-    document.getElementById('idCounter').textContent = ids.length + ' 个 ID';
+    $('idCounter').textContent = ids.length + ' 个 ID';
   }
 
   function parseIdList() {
-    const raw = document.getElementById('idInput').value;
+    const raw = $('idInput').value;
     return raw.split(/[\n\r,，\t]+/)
       .map(s => s.trim())
       .filter(s => s.length > 0);
   }
 
   function applyIdFilter() {
-    if (!workingRows.length) {
-      showToast('⚠️ 请先上传文件', 'warning'); return;
-    }
-    const ids = parseIdList();
-    if (ids.length === 0) {
-      showToast('⚠️ 请先粘贴 ID 列表', 'warning'); return;
-    }
+    const targets = scopeFiles();
+    if (!targets.length) { showToast('⚠️ 请先上传文件', 'warning'); return; }
 
-    const colIdx = parseInt(document.getElementById('idColSelect').value, 10);
+    const ids = parseIdList();
+    if (ids.length === 0) { showToast('⚠️ 请先粘贴 ID 列表', 'warning'); return; }
+
+    const colIdx = parseInt($('idColSelect').value, 10);
     const idSet  = new Set(ids.map(id => String(id).trim()));
 
-    // 构建合格 / 不合格行索引
-    // 保留匹配：ID 在列表内 = 合格；删除匹配：ID 不在列表内 = 合格
-    const qualifiedIdx = [], unqualifiedIdx = [];
-    workingRows.forEach((row, i) => {
-      const cellVal = String(row[colIdx] ?? '').trim();
-      const inSet   = idSet.has(cellVal);
-      const isQualified = idFilterMode === 'keep' ? inSet : !inSet;
-      if (isQualified) qualifiedIdx.push(i);
-      else unqualifiedIdx.push(i);
+    const details = [];
+    let totalA = 0, totalN = 0, totalNotFound = 0;
+
+    targets.forEach(f => {
+      const qualifiedIdx = [], unqualifiedIdx = [];
+      f.workingRows.forEach((row, i) => {
+        const cellVal = String(row[colIdx] ?? '').trim();
+        const inSet   = idSet.has(cellVal);
+        const isQualified = idFilterMode === 'keep' ? inSet : !inSet;
+        if (isQualified) qualifiedIdx.push(i);
+        else unqualifiedIdx.push(i);
+      });
+
+      // 计算 ID 列表中有多少条在文件里没找到
+      const colValues = new Set(f.workingRows.map(r => String(r[colIdx] ?? '').trim()));
+      const notFound = ids.filter(id => !colValues.has(String(id).trim())).length;
+
+      f.idCtx = {
+        qualifiedIdx,
+        unqualifiedIdx,
+        total: f.workingRows.length,
+        colIdx,
+        mode: idFilterMode,
+        notFound
+      };
+
+      // 执行过滤：不合格行直接删除（预览中标红），只保留合格行
+      f.idDeleted = new Set(unqualifiedIdx);
+
+      totalA += qualifiedIdx.length;
+      totalN += f.workingRows.length;
+      totalNotFound += notFound;
+      details.push(`${f.name}：合格 ${qualifiedIdx.length}/${f.workingRows.length}（${fmtPct(f.workingRows.length ? qualifiedIdx.length / f.workingRows.length * 100 : 0)}）${notFound ? `，${notFound} 个ID未命中` : ''}`);
     });
 
-    idCtx = {
-      qualifiedIdx,
-      unqualifiedIdx,
-      total: workingRows.length,
-      colIdx,
-      mode: idFilterMode
-    };
-
-    // 默认不改动任何行（全部保留），删除量由「目标比例」决定
-    // 执行过滤：不合格行直接标记删除（预览中标红），只保留合格行
-    deletedRowIndices.clear();
-    qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
-    unqualifiedIdx.forEach(i => deletedRowIndices.add(i));
-
-    // 计算 ID 列表中有多少条在文件里没找到
-    const colValues = new Set(
-      workingRows.map(r => String(r[colIdx] ?? '').trim())
-    );
-    const notFound = ids.filter(id => !colValues.has(String(id).trim())).length;
-
     const colName = ['A','B','C','D','E'][colIdx] || `第${colIdx+1}`;
-    const A = qualifiedIdx.length;
-    const N = workingRows.length;
-    const ratio = N ? A / N * 100 : 0;
     const modeText = idFilterMode === 'keep' ? '保留匹配行' : '删除匹配行';
 
-    log(`ID过滤（${modeText}，匹配${colName}列）：输入 ${ids.length} 个ID，识别合格 ${A} 行、不合格 ${N - A} 行（已删除 ${N - A} 行），总完成 ${N} 行，结算比例 ${fmtPct(ratio)}${notFound > 0 ? `，有 ${notFound} 个ID未找到` : ''}`, idFilterMode === 'keep' ? 'success' : 'danger');
-    showToast(`✅ 已过滤：合格 ${A} 行 / 总完成 ${N} 行，结算比例 ${fmtPct(ratio)}`, A > 0 ? 'success' : 'warning');
+    log(`ID过滤（${modeText}，匹配${colName}列）[${scopeLabel()}]：输入 ${ids.length} 个ID · ${details.join('；')}`, idFilterMode === 'keep' ? 'success' : 'danger');
+
+    const ratio = totalN ? totalA / totalN * 100 : 0;
+    showToast(`✅ 已过滤 ${targets.length} 个文件：合计合格 ${totalA} / 总完成 ${totalN}，结算比例 ${fmtPct(ratio)}`, totalA > 0 ? 'success' : 'warning');
 
     // ID过滤视为行操作，解锁下载
-    rowOpExecuted = true;
+    targets.forEach(f => { f.rowOpExecuted = true; });
+
     updateExportLock();
+    renderFileList();
     renderPreview();
     renderSettle();
     updateStep(3);
     updateExportDesc();
 
-    // 刷新保留行 / 删除行提示（基于过滤后的有效行数）
     onKeepModeChange();
     onDeleteModeChange();
 
-    // 提示未命中
-    const hint = document.getElementById('idFilterHint');
-    if (notFound > 0) {
+    const hint = $('idFilterHint');
+    if (totalNotFound > 0) {
       hint.style.color = 'var(--warning)';
-      hint.textContent = `⚠️ 输入的 ${ids.length} 个 ID 中，有 ${notFound} 个在文件 ${colName} 列中未找到匹配项。已删除 ${N - A} 行不合格数据，预览中红色划线即为被删除的行。`;
+      if (targets.length > 1) {
+        hint.textContent = `⚠️ ID 列表共 ${ids.length} 个 ID，在各文件 ${colName} 列中累计有 ${totalNotFound} 次未命中（同一 ID 可能只在部分文件中缺失，各文件明细见下方表格）。已删除不合格数据行，预览中红色划线即为被删除的行。`;
+      } else {
+        hint.textContent = `⚠️ 输入的 ${ids.length} 个 ID 中，有 ${totalNotFound} 个在 ${colName} 列中未找到匹配项。已删除不合格数据行，预览中红色划线即为被删除的行。`;
+      }
     } else {
       hint.style.color = 'var(--success)';
-      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。已删除 ${N - A} 行不合格数据，预览中红色划线即为被删除的行。`;
+      hint.textContent = `✅ 所有 ${ids.length} 个 ID 均在文件中找到了匹配项。已删除不合格数据行，预览中红色划线即为被删除的行。`;
     }
   }
 
-  // ── 结算比例 ────────────────────────────────────────────────────────────────
-  function fmtPct(x) { return (Math.round(x * 100) / 100).toFixed(2) + '%'; }
-
-  // 当前实际交付行数（合格行全保留 + 未被删除的不合格行）
-  function getDeliveredCount() {
-    if (!idCtx) return 0;
-    const keptBad = idCtx.unqualifiedIdx.filter(i => !deletedRowIndices.has(i)).length;
-    return idCtx.qualifiedIdx.length + keptBad;
+  // ── 结算比例 ───────────────────────────────────────────────────────────────
+  // 当前作用域内的汇总
+  function scopeSettleSummary() {
+    const targets = scopeFiles().filter(f => f.idCtx);
+    const A = targets.reduce((s, f) => s + f.idCtx.qualifiedIdx.length, 0);
+    const N = targets.reduce((s, f) => s + f.idCtx.total, 0);
+    const T = targets.reduce((s, f) => s + getDeliveredCount(f), 0);
+    return { targets, A, N, T };
   }
 
   function renderSettle() {
-    const panel = document.getElementById('settlePanel');
-    if (!idCtx) { panel.classList.remove('visible'); return; }
+    const panel = $('settlePanel');
+    const { targets, A, N, T } = scopeSettleSummary();
+    if (!targets.length) { panel.classList.remove('visible'); return; }
     panel.classList.add('visible');
 
-    const A = idCtx.qualifiedIdx.length;
-    const total = idCtx.total;
-    const T = getDeliveredCount();
-    const baseRatio = total ? A / total * 100 : 0;
+    $('settleScopeTag').textContent = scopeMode === 'all'
+      ? `📚 汇总 ${targets.length} 个文件`
+      : `🎯 ${targets[0].name}`;
+
+    const baseRatio = N ? A / N * 100 : 0;
     const deliverRatio = T ? A / T * 100 : 0;
 
-    // 主口径固定：总合格 ÷ 原始总完成
-    document.getElementById('settleQualified').textContent = A;
-    document.getElementById('settleTotal').textContent = total;
-    document.getElementById('settleRatio').textContent = fmtPct(baseRatio);
+    $('settleQualified').textContent = A;
+    $('settleTotal').textContent = N;
+    $('settleRatio').textContent = fmtPct(baseRatio);
 
-    const extra = document.getElementById('settleExtra');
-    if (T === total) {
-      extra.innerHTML = `原始文件共 <b>${total}</b> 行 · 当前全部保留（交付 ${total} 行，未删除任何行）`;
+    const extra = $('settleExtra');
+    if (T === N) {
+      extra.innerHTML = `原始文件共 <b>${N}</b> 行 · 当前全部保留（交付 ${T} 行，未删除任何行）`;
     } else {
-      extra.innerHTML = `原始文件共 <b>${total}</b> 行 · 已删除 <b>${total - T}</b> 行 → 当前交付 <b>${T}</b> 行`
+      extra.innerHTML = `原始文件共 <b>${N}</b> 行 · 已删除 <b>${N - T}</b> 行 → 当前交付 <b>${T}</b> 行`
         + `（合格 ${A} + 不合格 ${T - A}）· 交付文件合格占比 <b style="color:#34d399">${fmtPct(deliverRatio)}</b>`;
     }
 
-    document.getElementById('settleRange').textContent =
+    $('settleRange').textContent =
       `可调范围：${fmtPct(baseRatio)}（全部保留） ~ 100.00%（只留合格行）；输入目标比例 = 想要交付文件里的合格占比`;
+
+    renderSettleDetail(targets, A, N, T);
+    updateRatioPreview();
+  }
+
+  function renderSettleDetail(targets, A, N, T) {
+    const wrap = $('settleDetail');
+    const body = $('settleDetailBody');
+    // 单文件模式不需要明细表
+    if (targets.length < 2) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    const rows = targets.map(f => {
+      const a = f.idCtx.qualifiedIdx.length;
+      const n = f.idCtx.total;
+      const t = getDeliveredCount(f);
+      const r = n ? a / n * 100 : 0;
+      const dr = t ? a / t * 100 : 0;
+      const nf = f.idCtx.notFound;
+      return `<tr>
+        <td class="sd-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</td>
+        <td>${n}</td>
+        <td class="sd-ok">${a}</td>
+        <td class="sd-muted">${n - a}</td>
+        <td class="${r >= 80 ? 'sd-ok' : 'sd-warn'}">${fmtPct(r)}</td>
+        <td>${t}</td>
+        <td class="${dr >= 80 ? 'sd-ok' : 'sd-warn'}">${fmtPct(dr)}</td>
+        <td class="${nf > 0 ? 'sd-warn' : 'sd-muted'}">${nf}</td>
+      </tr>`;
+    }).join('');
+
+    const totalRatio = N ? A / N * 100 : 0;
+    const totalDr = T ? A / T * 100 : 0;
+    const totalNotFound = targets.reduce((s, f) => s + f.idCtx.notFound, 0);
+    const totalRow = `<tr class="total-row">
+      <td class="sd-name">合计（${targets.length} 个文件）</td>
+      <td>${N}</td>
+      <td class="sd-ok">${A}</td>
+      <td>${N - A}</td>
+      <td class="${totalRatio >= 80 ? 'sd-ok' : 'sd-warn'}">${fmtPct(totalRatio)}</td>
+      <td>${T}</td>
+      <td class="${totalDr >= 80 ? 'sd-ok' : 'sd-warn'}">${fmtPct(totalDr)}</td>
+      <td class="sd-muted">${totalNotFound}</td>
+    </tr>`;
+
+    body.innerHTML = rows + totalRow;
   }
 
   // 输入目标比例时的实时预览
   function updateRatioPreview() {
-    const hint = document.getElementById('settleHint');
-    if (!idCtx) { hint.textContent = ''; hint.className = 'settle-hint'; return; }
+    const hint = $('settleHint');
+    const { targets, A, N } = scopeSettleSummary();
+    if (!targets.length) { hint.textContent = ''; hint.className = 'settle-hint'; return; }
 
-    const A = idCtx.qualifiedIdx.length;
-    const N = idCtx.total;
     const baseRatio = N ? A / N * 100 : 0;
-    const raw = document.getElementById('targetRatioInput').value;
+    const raw = $('targetRatioInput').value;
     const X = parseFloat(raw);
 
     hint.className = 'settle-hint';
@@ -1531,54 +2182,72 @@
     }
     if (X < baseRatio - 1e-9) {
       hint.className = 'settle-hint warn';
-      hint.textContent = `⚠️ 不可达：合格行只有 ${A} 行，即使一行不删，比例下限也是 ${fmtPct(baseRatio)}（= ${A}÷${N}）。想把比例降到更低，只能减少合格行，属于「保留行/删除行」操作范畴。`;
+      hint.textContent = `⚠️ 不可达：合格行合计只有 ${A} 行，即使一行不删，比例下限也是 ${fmtPct(baseRatio)}（= ${A}÷${N}）。想把比例降到更低，只能减少合格行，属于「保留行/删除行」操作范畴。`;
       return;
     }
 
-    const T = Math.min(N, Math.max(A, Math.round(A * 100 / X)));
-    const keepBad = T - A;
-    const actual = A / T * 100;
+    // 逐文件计算交付行数
+    const perFile = targets.map(f => {
+      const a = f.idCtx.qualifiedIdx.length;
+      const n = f.idCtx.total;
+      const t = Math.min(n, Math.max(a, Math.round(a * 100 / X)));
+      return { f, a, n, t, keepBad: t - a, actual: t ? a / t * 100 : 0 };
+    });
+    const T = perFile.reduce((s, p) => s + p.t, 0);
+    const keepBadTotal = perFile.reduce((s, p) => s + p.keepBad, 0);
+    const actual = T ? A / T * 100 : 0;
+
     hint.className = 'settle-hint ok';
-    hint.textContent = `预计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBad}（从原文件中恢复 ${keepBad} 行不合格数据、删除 ${N - T} 行）→ 交付文件合格占比 ${fmtPct(actual)}`;
+    if (targets.length === 1) {
+      hint.textContent = `预计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBadTotal}（从原文件中恢复 ${keepBadTotal} 行不合格数据、删除 ${N - T} 行）→ 交付文件合格占比 ${fmtPct(actual)}`;
+    } else {
+      const detail = perFile.map(p => `${escapeHtml(p.f.name)}：交付 ${p.t}（合格 ${p.a} + 不合格 ${p.keepBad}）`).join('；');
+      hint.textContent = `批量预计：合计交付 ${T} 行 = 合格 ${A} + 不合格 ${keepBadTotal} → 整体合格占比 ${fmtPct(actual)}。各文件：${detail}`;
+    }
   }
 
   function applyTargetRatio() {
-    if (!idCtx) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
+    const { targets, A, N } = scopeSettleSummary();
+    if (!targets.length) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
 
-    const raw = document.getElementById('targetRatioInput').value;
+    const raw = $('targetRatioInput').value;
     const X = parseFloat(raw);
     if (!raw || !X || X <= 0 || X > 100) {
       showToast('⚠️ 请输入 0~100 之间的目标比例', 'warning'); return;
     }
 
-    const A = idCtx.qualifiedIdx.length;
-    const N = idCtx.total;
     const baseRatio = N ? A / N * 100 : 0;
-
     if (!A) { showToast('⚠️ 合格行为 0，请检查 ID 列表与匹配列', 'warning'); return; }
     if (X < baseRatio - 1e-9) {
       showToast(`⚠️ 目标 ${fmtPct(X)} 低于下限 ${fmtPct(baseRatio)}，无法实现（合格行只有 ${A} 行）`, 'warning');
       return;
     }
 
-    // 需要的交付总行数：合格行全保留，用不合格行补足
-    let T = Math.round(A * 100 / X);
-    T = Math.min(N, Math.max(A, T));
-    const keepBad = T - A;
+    // 逐文件重建 ID 过滤层的删除标记
+    const details = [];
+    let totalT = 0;
+    targets.forEach(f => {
+      const a = f.idCtx.qualifiedIdx.length;
+      const n = f.idCtx.total;
+      let T = Math.round(a * 100 / X);
+      T = Math.min(n, Math.max(a, T));
+      const keepBad = T - a;
 
-    // 重建 ID 过滤层的删除标记
-    idCtx.qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
-    idCtx.unqualifiedIdx.forEach(i => deletedRowIndices.add(i));
-    if (keepBad > 0) {
-      shuffle([...idCtx.unqualifiedIdx]).slice(0, keepBad).forEach(i => deletedRowIndices.delete(i));
-    }
+      f.idDeleted = new Set(f.idCtx.unqualifiedIdx);
+      if (keepBad > 0) {
+        shuffle([...f.idCtx.unqualifiedIdx]).slice(0, keepBad).forEach(i => f.idDeleted.delete(i));
+      }
+      totalT += T;
+      details.push(`${f.name}：交付 ${T} 行（合格 ${a} + 不合格 ${keepBad}）`);
+    });
 
-    const ratio = A / T * 100;
-    log(`按目标比例过滤：目标 ${fmtPct(X)} → 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），删除 ${N - T} 行，交付文件合格占比 ${fmtPct(ratio)}`, 'success');
-    showToast(`✅ 交付 ${T} 行（合格 ${A} + 不合格 ${keepBad}），合格占比 ${fmtPct(ratio)}`, 'success');
+    const ratio = totalT ? A / totalT * 100 : 0;
+    log(`按目标比例过滤（目标 ${fmtPct(X)}）[${scopeLabel()}]：${details.join('；')} · 合计交付 ${totalT} 行，合格占比 ${fmtPct(ratio)}`, 'success');
+    showToast(`✅ 交付 ${totalT} 行（合格 ${A} + 不合格 ${totalT - A}），合格占比 ${fmtPct(ratio)}`, 'success');
 
-    rowOpExecuted = true;
+    targets.forEach(f => { f.rowOpExecuted = true; });
     updateExportLock();
+    renderFileList();
     renderPreview();
     renderSettle();
     updateExportDesc();
@@ -1590,12 +2259,13 @@
 
   // 还原：不删除任何行（比例回到全部保留时的水平）
   function resetRatioAdjust() {
-    if (!idCtx) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
-    idCtx.qualifiedIdx.forEach(i => deletedRowIndices.delete(i));
-    idCtx.unqualifiedIdx.forEach(i => deletedRowIndices.delete(i));
-    document.getElementById('targetRatioInput').value = '';
-    log('已还原：ID 过滤层不做任何删除，全部行保留', 'warning');
+    const { targets } = scopeSettleSummary();
+    if (!targets.length) { showToast('⚠️ 请先执行 ID 过滤', 'warning'); return; }
+    targets.forEach(f => { f.idDeleted = new Set(); });
+    $('targetRatioInput').value = '';
+    log(`已还原：ID 过滤层不做任何删除，全部行保留 [${scopeLabel()}]`, 'warning');
     showToast('↩️ 已还原，全部行保留', 'warning');
+    renderFileList();
     renderPreview();
     renderSettle();
     updateExportDesc();
@@ -1605,23 +2275,27 @@
   }
 
   // ── Reset ──────────────────────────────────────────────────────────────────
-  function resetAll() {
-    removeFile();
-    document.getElementById('keepValue').value = '';
-    document.getElementById('deleteValue').value = '';
-    document.getElementById('keepHint').textContent = '';
-    document.getElementById('deleteHint').textContent = '';
-    document.getElementById('opLog').innerHTML = '';
-    document.getElementById('idInput').value = '';
-    document.getElementById('idCounter').textContent = '0 个 ID';
-    document.getElementById('idFilterHint').textContent = '';
-    document.getElementById('targetRatioInput').value = '';
-    document.getElementById('settleHint').textContent = '';
-    document.getElementById('settleHint').className = 'settle-hint';
-    idCtx = null;
-    idFilterMode = 'keep';
+  function resetAll(silent = false) {
+    clearAllFiles();
+    $('keepValue').value = '';
+    $('deleteValue').value = '';
+    $('keepHint').textContent = '';
+    $('deleteHint').textContent = '';
+    $('opLog').innerHTML = '';
+    $('idInput').value = '';
+    $('idCounter').textContent = '0 个 ID';
+    $('idFilterHint').textContent = '';
+    $('targetRatioInput').value = '';
+    $('settleHint').textContent = '';
+    $('settleHint').className = 'settle-hint';
+    $('settleDetail').style.display = 'none';
+    $('columnConfirm').classList.remove('visible');
+    scopeMode = 'current';
     setIdMode('keep');
-    showToast('🔄 已重置，请重新上传文件', 'warning');
+    updateRowOpMutex();
+    updateExportLock();
+    updateStep(1);
+    if (!silent) showToast('🔄 已重置，请重新上传文件', 'warning');
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1634,11 +2308,12 @@
   }
 
   function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   function log(msg, type = '') {
-    const logEl = document.getElementById('opLog');
+    const logEl = $('opLog');
+    if (!logEl) return;
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
     const div = document.createElement('div');
@@ -1650,7 +2325,7 @@
 
   function updateStep(n) {
     for (let i = 1; i <= 4; i++) {
-      const el = document.getElementById('step' + i);
+      const el = $('step' + i);
       el.classList.remove('active', 'done');
       if (i < n) el.classList.add('done');
       else if (i === n) el.classList.add('active');
@@ -1659,7 +2334,7 @@
 
   let toastTimer;
   function showToast(msg, type = 'success') {
-    const toast = document.getElementById('toast');
+    const toast = $('toast');
     toast.className = `show toast-${type}`;
     toast.textContent = msg;
     clearTimeout(toastTimer);
